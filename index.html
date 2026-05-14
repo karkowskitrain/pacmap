@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>PAC-MAP</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -89,6 +92,59 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
   .score-num { font-size:18px; }
   #map-scorebar span { font-size:10px; }
   #sb-lives { font-size:14px; }
+}
+
+/* ══ LANDSCAPE — car navigation mode ══
+   Info panel on LEFT, map fills RIGHT
+   Bigger text, easy to read at a glance                */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Reset any portrait overrides */
+  #screen-map {
+    flex-direction: row !important;
+    align-items: stretch;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Info panel — LEFT side, wider for readability */
+  #info-panel {
+    width: 260px !important;
+    flex-shrink: 0;
+    order: 1;
+    border-right: 3px solid #4444ff;
+    border-left: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Map — fills remaining RIGHT side */
+  #map-container {
+    order: 2;
+    flex: 1;
+  }
+
+  /* Larger text for glanceability in car */
+  .info-logo  { font-size:16px !important; padding:10px 6px !important; }
+  .info-lbl   { font-size:9px !important; }
+  .info-val   { font-size:18px !important; }
+  .info-val.white { font-size:12px !important; }
+  .info-val.sm    { font-size:11px !important; }
+  .info-val.lives { font-size:18px !important; }
+  .info-block { padding:8px 12px !important; }
+  .legend-lbl { font-size:9px !important; }
+  .legend-row { font-size:9px !important; }
+  .turn-hdr   { font-size:9px !important; }
+  .turn-step  { font-size:9px !important; padding:5px 12px !important; }
+  .score-lbl  { font-size:9px !important; }
+  .score-num  { font-size:22px !important; }
+
+  /* Scorebar */
+  #map-scorebar span { font-size:11px !important; }
+  #sb-lives { font-size:16px !important; }
+
+  /* Ghost legend compact in landscape */
+  .ghost-legend { padding:6px 12px !important; }
 }
 #screen-map{ flex-direction:row; align-items:stretch; justify-content:flex-start; padding:0; }
 #info-panel{ width:240px; flex-shrink:0; background:#000; border-right:3px solid #4444ff; box-shadow:2px 0 14px rgba(68,68,255,.4); display:flex; flex-direction:column; overflow:hidden; }
@@ -370,6 +426,7 @@ async function launchMap() {
   const oVal   = oInput.value.trim();
   const dVal   = dInput.value.trim();
   if (!oVal || !dVal) { alert('ENTER FROM AND TO LOCATIONS'); return; }
+  requestFullscreen();
   showScreen('screen-map');
   document.getElementById('i-mode').textContent = navMode === 'drive' ? '🚗 DRIVE' : '🚶 WALK';
   showLoading('GEOCODING LOCATIONS...');
@@ -1205,6 +1262,22 @@ document.getElementById('origin').addEventListener('keydown', e=>{ if(e.key==='E
 document.getElementById('dest-input').addEventListener('keydown', e=>{ if(e.key==='Enter') launchMap(); });
 attachAutocomplete('origin','suggest-origin');
 attachAutocomplete('dest-input','suggest-dest');
+
+// ══ FULLSCREEN ══
+function requestFullscreen() {
+  const el = document.documentElement;
+  if      (el.requestFullscreen)       el.requestFullscreen().catch(()=>{});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else if (el.mozRequestFullScreen)    el.mozRequestFullScreen();
+}
+
+// Fix map rendering on rotate / resize
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { if (leafMap) leafMap.invalidateSize(); }, 400);
+});
+window.addEventListener('resize', () => {
+  if (leafMap) leafMap.invalidateSize();
+});
 </script>
 </body>
 </html>
