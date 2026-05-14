@@ -147,25 +147,25 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
   .ghost-legend { padding:6px 12px !important; }
 }
 #screen-map{ flex-direction:row; align-items:stretch; justify-content:flex-start; padding:0; }
-#info-panel{ width:240px; flex-shrink:0; background:#000; border-right:3px solid #4444ff; box-shadow:2px 0 14px rgba(68,68,255,.4); display:flex; flex-direction:column; overflow:hidden; }
-.info-logo{ font-size:20px; color:#FFD700; text-shadow:0 0 10px #FFD700; text-align:center; padding:14px 6px 12px; border-bottom:2px solid #4444ff; letter-spacing:2px; }
-.info-block{ padding:10px 12px; border-bottom:1px solid #0d0d22; }
-.info-lbl{ font-size:10px; color:#6666aa; letter-spacing:1px; margin-bottom:4px; }
-.info-val{ font-size:20px; color:#FFD700; text-shadow:0 0 8px rgba(255,215,0,.5); }
+#info-panel{ width:160px; flex-shrink:0; background:#000; border-right:3px solid #4444ff; box-shadow:2px 0 14px rgba(68,68,255,.4); display:flex; flex-direction:column; overflow:hidden; }
+.info-logo{ font-size:10px; color:#FFD700; text-shadow:0 0 10px #FFD700; text-align:center; padding:8px 6px 6px; border-bottom:2px solid #4444ff; letter-spacing:2px; }
+.info-block{ padding:5px 8px; border-bottom:1px solid #0d0d22; }
+.info-lbl{ font-size:5px; color:#6666aa; letter-spacing:1px; margin-bottom:2px; }
+.info-val{ font-size:10px; color:#FFD700; text-shadow:0 0 8px rgba(255,215,0,.5); }
 .info-val.cyan{ color:#00FFFF; text-shadow:0 0 8px rgba(0,255,255,.4); }
-.info-val.white{ color:#fff; font-size:14px; }
-.info-val.sm{ font-size:12px; color:#ffb8ff; }
-.info-val.lives{ font-size:18px; letter-spacing:2px; }
-.ghost-legend{ padding:10px 12px; border-bottom:1px solid #0d0d22; }
-.legend-lbl{ font-size:10px; color:#6666aa; letter-spacing:1px; margin-bottom:8px; }
-.legend-row{ display:flex; align-items:center; gap:6px; font-size:10px; color:#8888bb; margin:5px 0; }
+.info-val.white{ color:#fff; font-size:7px; }
+.info-val.sm{ font-size:6px; color:#ffb8ff; }
+.info-val.lives{ font-size:9px; letter-spacing:2px; }
+.ghost-legend{ padding:5px 8px; border-bottom:1px solid #0d0d22; }
+.legend-lbl{ font-size:5px; color:#6666aa; letter-spacing:1px; margin-bottom:4px; }
+.legend-row{ display:flex; align-items:center; gap:4px; font-size:5px; color:#8888bb; margin:3px 0; }
 .turn-panel{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#4444ff #000; }
-.turn-hdr{ font-size:10px; color:#6666aa; letter-spacing:1px; padding:8px 12px 5px; }
-.turn-step{ font-size:10px; color:#6666aa; padding:6px 12px; border-bottom:1px solid #0a0a1a; line-height:1.8; }
+.turn-hdr{ font-size:5px; color:#6666aa; letter-spacing:1px; padding:4px 8px 2px; }
+.turn-step{ font-size:5px; color:#6666aa; padding:3px 8px; border-bottom:1px solid #0a0a1a; line-height:1.8; }
 .turn-step.now{ color:#FFD700; background:rgba(255,215,0,.04); }
-.score-display{ padding:10px 12px; border-top:2px solid #4444ff; text-align:center; }
-.score-lbl{ font-size:10px; color:#6666aa; margin-bottom:4px; }
-.score-num{ font-size:24px; color:#FFD700; text-shadow:0 0 10px #FFD700; }
+.score-display{ padding:5px 8px; border-top:2px solid #4444ff; text-align:center; }
+.score-lbl{ font-size:5px; color:#6666aa; margin-bottom:2px; }
+.score-num{ font-size:12px; color:#FFD700; text-shadow:0 0 10px #FFD700; }
 
 #map-container{ flex:1; position:relative; overflow:hidden; }
 #map{ width:100%; height:100%; }
@@ -283,8 +283,9 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
   <div class="dest-box">
     <div style="position:relative">
       <div class="field-label">▸ FROM</div>
-      <input class="pac-input" id="origin" placeholder="START LOCATION..." autocomplete="off"/>
+      <input class="pac-input" id="origin" placeholder="📍 LOCATING YOU..." autocomplete="off" readonly style="color:#00FFFF;font-size:6px"/>
       <div class="suggest-list" id="suggest-origin"></div>
+      <div style="font-size:5px;color:#444466;margin-top:3px;letter-spacing:1px">TAP TO ENTER MANUALLY</div>
     </div>
     <div style="position:relative">
       <div class="field-label">▸ TO</div>
@@ -397,7 +398,65 @@ function showScreen(id) {
   if (id === 'screen-map' && !mapReady) { initLeafMap(); mapReady = true; }
 }
 function goToTitle() { stopGame(); showScreen('screen-title'); }
-function goToDestScreen() { showScreen('screen-dest'); }
+function goToDestScreen() {
+  showScreen('screen-dest');
+  autoLocateOrigin();
+}
+
+// Auto-fill FROM with current GPS position
+function autoLocateOrigin() {
+  const input = document.getElementById('origin');
+  input.value = '';
+  input.placeholder = '📍 LOCATING YOU...';
+  input.readOnly = true;
+  input.style.color = '#00FFFF';
+  delete input.dataset.lat;
+  delete input.dataset.lng;
+
+  if (!navigator.geolocation) {
+    input.placeholder = 'ENTER START LOCATION';
+    input.readOnly = false;
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      input.dataset.lat = lat;
+      input.dataset.lng = lng;
+      // Reverse geocode to show address
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const d = await r.json();
+        const name = d.display_name
+          ? d.display_name.split(',').slice(0,2).join(',').trim()
+          : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        input.value = '📍 ' + name.toUpperCase();
+      } catch(e) {
+        input.value = `📍 ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+      input.style.color = '#00FFFF';
+    },
+    () => {
+      input.placeholder = 'ENTER START LOCATION';
+      input.readOnly = false;
+      input.style.color = '#FFD700';
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+
+  // Tap to override with manual entry
+  input.addEventListener('click', () => {
+    input.readOnly = false;
+    input.style.color = '#FFD700';
+    input.value = '';
+    input.placeholder = 'START LOCATION...';
+    delete input.dataset.lat;
+    delete input.dataset.lng;
+    attachAutocomplete('origin', 'suggest-origin');
+  }, { once: true });
+}
 function setMode(m) {
   navMode = m;
   document.getElementById('btn-drive').classList.toggle('active', m === 'drive');
