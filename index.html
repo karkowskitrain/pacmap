@@ -308,12 +308,11 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 <!-- ════ SCREEN 3: MAP ════ -->
 <div id="screen-map" class="screen">
   <div id="info-panel">
-    <div class="info-logo">PAC-MAP</div>
-    <div class="info-block"><div class="info-lbl">DISTANCE</div><div class="info-val" id="i-dist">---</div></div>
-    <div class="info-block"><div class="info-lbl">ETA</div><div class="info-val cyan" id="i-eta">---</div></div>
-    <div class="info-block"><div class="info-lbl">MODE</div><div class="info-val white" id="i-mode">DRIVE</div></div>
-    <div class="info-block"><div class="info-lbl">LIVES</div><div class="info-val lives" id="i-lives">😮😮😮</div></div>
-    <div class="info-block"><div class="info-lbl">STATUS</div><div class="info-val sm" id="i-status">LOADING...</div></div>
+    <div class="info-logo" style="font-size:5px;padding:3px 4px 3px;">PAC-MAP</div>
+    <div class="info-block" style="padding:2px 6px;"><div class="info-lbl" style="font-size:3px;">DISTANCE</div><div class="info-val" style="font-size:5px;" id="i-dist">---</div></div>
+    <div class="info-block" style="padding:2px 6px;"><div class="info-lbl" style="font-size:3px;">ETA</div><div class="info-val cyan" style="font-size:5px;" id="i-eta">---</div></div>
+    <div class="info-block" style="padding:2px 6px;"><div class="info-lbl" style="font-size:3px;">MODE</div><div class="info-val white" style="font-size:4px;" id="i-mode">DRIVE</div></div>
+    <div class="info-block" style="padding:2px 6px;"><div class="info-lbl" style="font-size:3px;">STATUS</div><div class="info-val sm" style="font-size:3px;" id="i-status">LOADING...</div></div>
     <div class="ghost-legend">
       <div class="legend-lbl">LEGEND</div>
       <div class="legend-row"><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="#FFD700"/><polygon points="7,7 13,4 13,10" fill="#000"/></svg> YOU</div>
@@ -521,8 +520,7 @@ async function startGame() {
   pacPos = [...originCoords];
   placePacman(pacPos);
   placeCherry(destCoords);
-  leafMap.setView(pacPos, 17);
-  // Start GPS
+  leafMap.setView(pacPos, 16);
   startGPS();
   // Start mouth animation
   mouthTimer = setInterval(() => {
@@ -551,7 +549,7 @@ async function retryGame() {
   pacPos = [...originCoords];
   placePacman(pacPos);
   placeCherry(destCoords);
-  leafMap.setView(pacPos, 17);
+  leafMap.setView(pacPos, 16);
   startGPS();
   mouthTimer = setInterval(() => {
     mouthOpen = !mouthOpen;
@@ -815,28 +813,35 @@ function checkGhostCollision(pos) {
 function onGhostHit() {
   if (!gameActive || hitCooldown) return;
   hitCooldown = true;
-  lives--;
-  updateHUD();
   playGhostHit();
   const flash = document.getElementById('flash-overlay');
   flash.className = '';
   void flash.offsetWidth;
   flash.className = 'hit';
-  setStatus('HIT BY GHOST! ' + lives + ' LIVES LEFT');
-  // Reset Pac-Man to origin after brief pause
-  setTimeout(() => {
-    if (lives <= 0) {
-      onGameOver();
-    } else {
-      pacPos = [...originCoords];
-      if (pacMarker) { pacMarker.setLatLng(pacPos); pacMarker.setIcon(makePacIcon(0, true)); }
-      leafMap.setView(pacPos, 17);
-      // Restore dots
-      restoreRouteDots();
-      setStatus('BACK TO START! FOLLOW DOTS!');
-      setTimeout(() => { hitCooldown = false; }, 3000);
+  setStatus('GHOST! RECALCULATING...');
+  setTimeout(async () => {
+    // Stay at current position, just recalculate route from here to destination
+    if (pacPos) {
+      originCoords = [...pacPos];
+      // Clear old route dots and road layers, redraw from current pos
+      routeDotMarkers.forEach(d => leafMap.removeLayer(d));
+      routeDotMarkers = [];
+      allRoadLayers.forEach(l => leafMap.removeLayer(l));
+      allRoadLayers = [];
+      ghostData.forEach(g => leafMap.removeLayer(g.marker));
+      ghostData = [];
+      offRoadSegments = [];
+      ghostColorIdx = 0;
+      try {
+        await buildRoute();
+        await drawAllRoads();
+        setStatus('ROUTE UPDATED! FOLLOW DOTS!');
+      } catch(e) {
+        setStatus('RECALC FAILED - KEEP GOING');
+      }
     }
-  }, 800);
+    setTimeout(() => { hitCooldown = false; }, 2000);
+  }, 600);
 }
 
 function onGameOver() {
