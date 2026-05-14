@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAC-MAP</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root { --yellow:#FFD700; --neon:#4444ff; --cyan:#00FFFF; --dot:#ffffff; }
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; height:100vh; overflow:hidden; }
+.screen{ position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; background:#000; }
+.screen.active{ display:flex; }
+
+@keyframes blink      { 0%,100%{opacity:1}  50%{opacity:0} }
+@keyframes titleGlow  { from{text-shadow:0 0 14px #FFD700} to{text-shadow:0 0 30px #FFD700,0 0 55px rgba(255,215,0,.5)} }
+@keyframes parade     { from{transform:translateX(-110%)} to{transform:translateX(110vw)} }
+@keyframes ghostBob   { from{transform:translateY(0)} to{transform:translateY(-5px)} }
+@keyframes cherryPulse{ from{transform:scale(1)} to{transform:scale(1.18)} }
+@keyframes spin       { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes loadFill   { 0%{width:0;margin-left:0} 50%{width:100%;margin-left:0} 100%{width:0;margin-left:100%} }
+@keyframes hitFlash   { 0%,100%{background:rgba(0,0,0,0)} 20%,60%{background:rgba(255,0,0,.55)} }
+@keyframes winFlash   { 0%,100%{background:rgba(0,0,0,0)} 20%,60%{background:rgba(255,215,0,.4)} }
+
+/* ══ TITLE ══ */
+#screen-title{ justify-content:flex-start; padding-top:16px; gap:0; }
+.score-bar{ width:100%; display:flex; justify-content:space-around; padding:0 16px 12px; font-size:10px; letter-spacing:2px; }
+.title-block{ text-align:center; margin-bottom:14px; }
+.t-pac{ font-size:clamp(26px,6vw,52px); color:#FFD700; letter-spacing:6px; animation:titleGlow 1.8s ease-in-out infinite alternate; }
+.t-map{ font-size:clamp(26px,6vw,52px); color:#FFD700; letter-spacing:6px; text-shadow:0 0 20px #FFD700; animation:titleGlow 1.8s ease-in-out infinite alternate; }
+.char-header{ font-size:10px; color:#fff; letter-spacing:2px; margin-bottom:12px; }
+.char-table{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.char-row{ display:flex; align-items:center; gap:10px; }
+.c-name{ font-size:9px; min-width:108px; letter-spacing:1px; }
+.c-dashes,.c-nick{ font-size:9px; color:#fff; letter-spacing:1px; }
+.parade-wrap{ width:min(480px,92vw); height:50px; position:relative; overflow:hidden; margin-bottom:12px; border-top:2px solid #1a1aff; border-bottom:2px solid #1a1aff; }
+.parade-inner{ position:absolute; bottom:8px; left:0; display:flex; align-items:center; gap:14px; white-space:nowrap; animation:parade 8s linear infinite; }
+.p-dot{ width:5px; height:5px; border-radius:50%; background:#FFFF99; flex-shrink:0; }
+.p-big{ width:10px; height:10px; border-radius:50%; background:#FFD700; flex-shrink:0; }
+.pts-block{ margin-bottom:8px; }
+.pts-row{ display:flex; align-items:center; gap:8px; font-size:9px; margin:3px 0; }
+.namco{ font-size:10px; color:#FF4500; font-style:italic; letter-spacing:2px; margin-top:4px; }
+.press-start{ font-size:12px; color:#ffb8ff; letter-spacing:3px; animation:blink .9s step-end infinite; margin-top:14px; cursor:pointer; }
+.credit-line{ font-size:8px; color:#fff; letter-spacing:2px; margin-top:8px; }
+
+/* ══ DEST ══ */
+#screen-dest{ gap:14px; }
+.dest-title{ font-size:clamp(10px,3vw,17px); color:#FFD700; text-shadow:0 0 12px #FFD700; letter-spacing:3px; }
+.dest-box{ width:min(500px,90vw); border:3px solid #4444ff; box-shadow:0 0 18px rgba(68,68,255,.5); background:#000; padding:22px 24px; display:flex; flex-direction:column; gap:14px; }
+.field-label{ font-size:7px; color:#00FFFF; letter-spacing:2px; margin-bottom:5px; text-shadow:0 0 8px #00FFFF; }
+.pac-input{ width:100%; font-family:'Press Start 2P',monospace; font-size:8px; background:#000; border:2px solid #222266; color:#FFD700; padding:10px 12px; outline:none; caret-color:#FFD700; letter-spacing:1px; }
+.pac-input:focus{ border-color:#FFD700; box-shadow:0 0 10px rgba(255,215,0,.3); }
+.pac-input::placeholder{ color:#333355; }
+.mode-row{ display:flex; gap:10px; }
+.mode-pill{ flex:1; font-family:'Press Start 2P',monospace; font-size:8px; padding:11px 6px; border:2px solid #222266; background:transparent; color:#fff; cursor:pointer; letter-spacing:1px; transition:all .1s; }
+.mode-pill.active{ border-color:#FFD700; background:#FFD700; color:#000; box-shadow:0 0 14px #FFD700; }
+.mode-pill:hover:not(.active){ border-color:#4444ff; color:#00FFFF; }
+.start-btn{ width:100%; font-family:'Press Start 2P',monospace; font-size:13px; padding:15px; border:3px solid #FFD700; background:transparent; color:#FFD700; cursor:pointer; letter-spacing:3px; text-shadow:0 0 10px #FFD700; transition:all .1s; }
+.start-btn:hover{ background:#FFD700; color:#000; text-shadow:none; box-shadow:0 0 20px #FFD700; }
+.back-btn{ font-family:'Press Start 2P',monospace; font-size:7px; background:transparent; border:none; color:#333366; cursor:pointer; }
+.back-btn:hover{ color:#fff; }
+.suggest-list{ position:absolute; top:100%; left:0; right:0; background:#000; border:2px solid #4444ff; border-top:none; max-height:180px; overflow-y:auto; z-index:100; display:none; box-shadow:0 4px 12px rgba(68,68,255,.4); }
+.suggest-item{ font-family:'Press Start 2P',monospace; font-size:6px; padding:8px 10px; color:#FFD700; cursor:pointer; border-bottom:1px solid #1a1a44; letter-spacing:1px; line-height:1.6; }
+.suggest-item:hover{ background:#1a1a44; color:#00FFFF; }
+
+/* ══ MAP SCREEN ══ */
+#screen-map{ flex-direction:row; align-items:stretch; justify-content:flex-start; padding:0; }
+#info-panel{ width:240px; flex-shrink:0; background:#000; border-right:3px solid #4444ff; box-shadow:2px 0 14px rgba(68,68,255,.4); display:flex; flex-direction:column; overflow:hidden; }
+.info-logo{ font-size:20px; color:#FFD700; text-shadow:0 0 10px #FFD700; text-align:center; padding:14px 6px 12px; border-bottom:2px solid #4444ff; letter-spacing:2px; }
+.info-block{ padding:10px 12px; border-bottom:1px solid #0d0d22; }
+.info-lbl{ font-size:10px; color:#6666aa; letter-spacing:1px; margin-bottom:4px; }
+.info-val{ font-size:20px; color:#FFD700; text-shadow:0 0 8px rgba(255,215,0,.5); }
+.info-val.cyan{ color:#00FFFF; text-shadow:0 0 8px rgba(0,255,255,.4); }
+.info-val.white{ color:#fff; font-size:14px; }
+.info-val.sm{ font-size:12px; color:#ffb8ff; }
+.info-val.lives{ font-size:18px; letter-spacing:2px; }
+.ghost-legend{ padding:10px 12px; border-bottom:1px solid #0d0d22; }
+.legend-lbl{ font-size:10px; color:#6666aa; letter-spacing:1px; margin-bottom:8px; }
+.legend-row{ display:flex; align-items:center; gap:6px; font-size:10px; color:#8888bb; margin:5px 0; }
+.turn-panel{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#4444ff #000; }
+.turn-hdr{ font-size:10px; color:#6666aa; letter-spacing:1px; padding:8px 12px 5px; }
+.turn-step{ font-size:10px; color:#6666aa; padding:6px 12px; border-bottom:1px solid #0a0a1a; line-height:1.8; }
+.turn-step.now{ color:#FFD700; background:rgba(255,215,0,.04); }
+.score-display{ padding:10px 12px; border-top:2px solid #4444ff; text-align:center; }
+.score-lbl{ font-size:10px; color:#6666aa; margin-bottom:4px; }
+.score-num{ font-size:24px; color:#FFD700; text-shadow:0 0 10px #FFD700; }
+
+#map-container{ flex:1; position:relative; overflow:hidden; }
+#map{ width:100%; height:100%; }
+/* Tiles blacked out — roads drawn manually */
+.leaflet-tile-pane{ display:none !important; }
+.leaflet-container{ background:#000 !important; }
+.leaflet-control-attribution{ display:none !important; }
+.leaflet-control-zoom a{ font-family:'Press Start 2P',monospace !important; font-size:8px !important; background:#000 !important; color:#FFD700 !important; border:2px solid #4444ff !important; width:28px !important; height:28px !important; line-height:24px !important; }
+.leaflet-popup-content-wrapper{ background:#000 !important; border:2px solid #FFD700 !important; border-radius:0 !important; font-family:'Press Start 2P',monospace !important; font-size:6px !important; color:#FFD700 !important; }
+.leaflet-popup-tip{ background:#FFD700 !important; }
+.map-hud{ position:absolute; z-index:900; pointer-events:none; font-size:5px; color:#1a1a44; letter-spacing:1px; }
+#hud-tl{ top:8px; left:8px; }
+#hud-tr{ top:8px; right:8px; text-align:right; line-height:2; }
+
+/* Score bar over map like original game */
+#map-scorebar{ position:absolute; top:0; left:0; right:0; height:38px; background:rgba(0,0,0,.85); z-index:800; display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:2px solid #4444ff; pointer-events:none; }
+#map-scorebar span{ font-size:14px; letter-spacing:2px; }
+#sb-score{ color:#FFD700; }
+#sb-lives{ font-size:18px; }
+#sb-high{ color:#FFD700; }
+
+#map-loading{ position:absolute; inset:0; background:rgba(0,0,0,.93); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:18px; }
+#map-loading.hidden{ display:none; }
+.load-pac-wrap{ filter:drop-shadow(0 0 10px #FFD700); }
+.load-pac-wrap svg{ animation:spin .5s linear infinite; }
+.load-txt{ font-size:9px; color:#FFD700; text-shadow:0 0 12px #FFD700; animation:blink .7s step-end infinite; text-align:center; line-height:2; }
+.load-bar{ width:180px; height:8px; border:2px solid #4444ff; overflow:hidden; }
+.load-fill{ height:100%; background:#FFD700; animation:loadFill 1.3s ease-in-out infinite; }
+
+/* Hit / win flash overlay */
+#flash-overlay{ position:absolute; inset:0; z-index:950; pointer-events:none; opacity:0; }
+#flash-overlay.hit{ animation:hitFlash .6s ease-out forwards; }
+#flash-overlay.win{ animation:winFlash 1s ease-out forwards; }
+
+/* Game over / win message */
+#game-msg{ position:absolute; inset:0; z-index:960; display:none; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,.88); gap:16px; }
+#game-msg.show{ display:flex; }
+#game-msg .msg-title{ font-size:22px; letter-spacing:4px; text-align:center; }
+#game-msg .msg-sub{ font-size:9px; color:#FFD700; letter-spacing:2px; text-align:center; line-height:2; }
+#game-msg .msg-btn{ font-family:'Press Start 2P',monospace; font-size:10px; padding:14px 20px; border:3px solid #FFD700; background:transparent; color:#FFD700; cursor:pointer; letter-spacing:2px; }
+#game-msg .msg-btn:hover{ background:#FFD700; color:#000; }
+</style>
+</head>
+<body>
+
+<!-- ════ SCREEN 1: TITLE ════ -->
+<div id="screen-title" class="screen active">
+  <div class="score-bar"><span>1UP</span><span>0</span><span>HIGH</span><span>0</span></div>
+  <div class="title-block">
+    <div class="t-pac">PAC</div>
+    <div class="t-map">MAP</div>
+  </div>
+  <div class="char-header">CHARACTER &nbsp;/&nbsp; NICKNAME</div>
+  <div class="char-table">
+    <div class="char-row">
+      <svg width="30" height="30" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 4px #FF0000)">
+        <rect x="3" y="3" width="8" height="1" fill="#FF0000"/><rect x="2" y="4" width="10" height="1" fill="#FF0000"/><rect x="1" y="5" width="12" height="5" fill="#FF0000"/><rect x="2" y="10" width="10" height="1" fill="#FF0000"/>
+        <rect x="3" y="5" width="3" height="3" fill="#fff"/><rect x="8" y="5" width="3" height="3" fill="#fff"/>
+        <rect x="5" y="6" width="1" height="2" fill="#2121DE"/><rect x="10" y="6" width="1" height="2" fill="#2121DE"/>
+        <rect x="2" y="11" width="2" height="2" fill="#FF0000"/><rect x="6" y="11" width="2" height="2" fill="#FF0000"/><rect x="10" y="11" width="2" height="2" fill="#FF0000"/>
+      </svg>
+      <span class="c-name" style="color:#FF0000">SHADOW</span><span class="c-dashes">- - - -</span><span class="c-nick">"BLINKY"</span>
+    </div>
+    <div class="char-row">
+      <svg width="30" height="30" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 4px #FFB8FF)">
+        <rect x="3" y="3" width="8" height="1" fill="#FFB8FF"/><rect x="2" y="4" width="10" height="1" fill="#FFB8FF"/><rect x="1" y="5" width="12" height="5" fill="#FFB8FF"/><rect x="2" y="10" width="10" height="1" fill="#FFB8FF"/>
+        <rect x="3" y="5" width="3" height="3" fill="#fff"/><rect x="8" y="5" width="3" height="3" fill="#fff"/>
+        <rect x="5" y="6" width="1" height="2" fill="#2121DE"/><rect x="10" y="6" width="1" height="2" fill="#2121DE"/>
+        <rect x="2" y="11" width="2" height="2" fill="#FFB8FF"/><rect x="6" y="11" width="2" height="2" fill="#FFB8FF"/><rect x="10" y="11" width="2" height="2" fill="#FFB8FF"/>
+      </svg>
+      <span class="c-name" style="color:#FFB8FF">SPEEDY</span><span class="c-dashes">- - - -</span><span class="c-nick">"PINKY"</span>
+    </div>
+    <div class="char-row">
+      <svg width="30" height="30" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 4px #00FFFF)">
+        <rect x="3" y="3" width="8" height="1" fill="#00FFFF"/><rect x="2" y="4" width="10" height="1" fill="#00FFFF"/><rect x="1" y="5" width="12" height="5" fill="#00FFFF"/><rect x="2" y="10" width="10" height="1" fill="#00FFFF"/>
+        <rect x="3" y="5" width="3" height="3" fill="#fff"/><rect x="8" y="5" width="3" height="3" fill="#fff"/>
+        <rect x="5" y="6" width="1" height="2" fill="#2121DE"/><rect x="10" y="6" width="1" height="2" fill="#2121DE"/>
+        <rect x="2" y="11" width="2" height="2" fill="#00FFFF"/><rect x="6" y="11" width="2" height="2" fill="#00FFFF"/><rect x="10" y="11" width="2" height="2" fill="#00FFFF"/>
+      </svg>
+      <span class="c-name" style="color:#00FFFF">BASHFUL</span><span class="c-dashes">- - -</span><span class="c-nick">"INKY"</span>
+    </div>
+    <div class="char-row">
+      <svg width="30" height="30" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 4px #FFB852)">
+        <rect x="3" y="3" width="8" height="1" fill="#FFB852"/><rect x="2" y="4" width="10" height="1" fill="#FFB852"/><rect x="1" y="5" width="12" height="5" fill="#FFB852"/><rect x="2" y="10" width="10" height="1" fill="#FFB852"/>
+        <rect x="3" y="5" width="3" height="3" fill="#fff"/><rect x="8" y="5" width="3" height="3" fill="#fff"/>
+        <rect x="5" y="6" width="1" height="2" fill="#2121DE"/><rect x="10" y="6" width="1" height="2" fill="#2121DE"/>
+        <rect x="2" y="11" width="2" height="2" fill="#FFB852"/><rect x="6" y="11" width="2" height="2" fill="#FFB852"/><rect x="10" y="11" width="2" height="2" fill="#FFB852"/>
+      </svg>
+      <span class="c-name" style="color:#FFB852">POKEY</span><span class="c-dashes">- - - -</span><span class="c-nick">"CLYDE"</span>
+    </div>
+  </div>
+  <div class="parade-wrap">
+    <div class="parade-inner">
+      <div class="p-dot"></div><div class="p-dot"></div><div class="p-dot"></div><div class="p-big"></div><div class="p-dot"></div><div class="p-dot"></div>
+      <svg width="30" height="30" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 6px #FFD700)"><circle cx="7" cy="7" r="6" fill="#FFD700"/><polygon points="7,7 13,3.5 13,10.5" fill="#000"/></svg>
+      <svg width="28" height="28" viewBox="0 0 14 14" style="image-rendering:pixelated"><rect x="2" y="4" width="10" height="6" fill="#FF0000"/><rect x="1" y="5" width="12" height="4" fill="#FF0000"/><rect x="3" y="3" width="8" height="2" fill="#FF0000"/><rect x="3" y="5" width="3" height="2" fill="#fff"/><rect x="8" y="5" width="3" height="2" fill="#fff"/><rect x="5" y="6" width="1" height="1" fill="#2121DE"/><rect x="10" y="6" width="1" height="1" fill="#2121DE"/><rect x="2" y="10" width="2" height="2" fill="#FF0000"/><rect x="6" y="10" width="2" height="2" fill="#FF0000"/><rect x="10" y="10" width="2" height="2" fill="#FF0000"/></svg>
+      <svg width="28" height="28" viewBox="0 0 14 14" style="image-rendering:pixelated"><rect x="2" y="4" width="10" height="6" fill="#FFB8FF"/><rect x="1" y="5" width="12" height="4" fill="#FFB8FF"/><rect x="3" y="3" width="8" height="2" fill="#FFB8FF"/><rect x="3" y="5" width="3" height="2" fill="#fff"/><rect x="8" y="5" width="3" height="2" fill="#fff"/><rect x="5" y="6" width="1" height="1" fill="#2121DE"/><rect x="10" y="6" width="1" height="1" fill="#2121DE"/><rect x="2" y="10" width="2" height="2" fill="#FFB8FF"/><rect x="6" y="10" width="2" height="2" fill="#FFB8FF"/><rect x="10" y="10" width="2" height="2" fill="#FFB8FF"/></svg>
+      <svg width="28" height="28" viewBox="0 0 14 14" style="image-rendering:pixelated"><rect x="2" y="4" width="10" height="6" fill="#00FFFF"/><rect x="1" y="5" width="12" height="4" fill="#00FFFF"/><rect x="3" y="3" width="8" height="2" fill="#00FFFF"/><rect x="3" y="5" width="3" height="2" fill="#fff"/><rect x="8" y="5" width="3" height="2" fill="#fff"/><rect x="5" y="6" width="1" height="1" fill="#2121DE"/><rect x="10" y="6" width="1" height="1" fill="#2121DE"/><rect x="2" y="10" width="2" height="2" fill="#00FFFF"/><rect x="6" y="10" width="2" height="2" fill="#00FFFF"/><rect x="10" y="10" width="2" height="2" fill="#00FFFF"/></svg>
+      <svg width="28" height="28" viewBox="0 0 14 14" style="image-rendering:pixelated"><rect x="2" y="4" width="10" height="6" fill="#FFB852"/><rect x="1" y="5" width="12" height="4" fill="#FFB852"/><rect x="3" y="3" width="8" height="2" fill="#FFB852"/><rect x="3" y="5" width="3" height="2" fill="#fff"/><rect x="8" y="5" width="3" height="2" fill="#fff"/><rect x="5" y="6" width="1" height="1" fill="#2121DE"/><rect x="10" y="6" width="1" height="1" fill="#2121DE"/><rect x="2" y="10" width="2" height="2" fill="#FFB852"/><rect x="6" y="10" width="2" height="2" fill="#FFB852"/><rect x="10" y="10" width="2" height="2" fill="#FFB852"/></svg>
+      <div class="p-dot"></div><div class="p-dot"></div><div class="p-dot"></div>
+    </div>
+  </div>
+  <div class="pts-block">
+    <div class="pts-row"><svg width="10" height="10"><circle cx="5" cy="5" r="3" fill="#FFFF99"/></svg><span>10</span><span>PTS</span></div>
+    <div class="pts-row"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#FFD700"/></svg><span>50</span><span>PTS</span></div>
+    <div class="namco">namco ®</div>
+  </div>
+  <div class="press-start" onclick="goToDestScreen()">— PRESS START —</div>
+  <div class="credit-line">CREDIT &nbsp;&nbsp; 1</div>
+</div>
+
+<!-- ════ SCREEN 2: DESTINATION ════ -->
+<div id="screen-dest" class="screen">
+  <div class="dest-title">INSERT DESTINATION</div>
+  <div class="dest-box">
+    <div style="position:relative">
+      <div class="field-label">▸ FROM</div>
+      <input class="pac-input" id="origin" placeholder="START LOCATION..." autocomplete="off"/>
+      <div class="suggest-list" id="suggest-origin"></div>
+    </div>
+    <div style="position:relative">
+      <div class="field-label">▸ TO</div>
+      <input class="pac-input" id="dest-input" placeholder="DESTINATION..." autocomplete="off"/>
+      <div class="suggest-list" id="suggest-dest"></div>
+    </div>
+    <div>
+      <div class="field-label">▸ MODE</div>
+      <div class="mode-row">
+        <button class="mode-pill active" id="btn-drive" onclick="setMode('drive')">🚗 DRIVE</button>
+        <button class="mode-pill"        id="btn-walk"  onclick="setMode('walk')">🚶 WALK</button>
+      </div>
+    </div>
+    <button class="start-btn" onclick="launchMap()">▶ START GAME</button>
+  </div>
+  <button class="back-btn" onclick="goToTitle()">◂ BACK</button>
+</div>
+
+<!-- ════ SCREEN 3: MAP ════ -->
+<div id="screen-map" class="screen">
+  <div id="info-panel">
+    <div class="info-logo">PAC-MAP</div>
+    <div class="info-block"><div class="info-lbl">DISTANCE</div><div class="info-val" id="i-dist">---</div></div>
+    <div class="info-block"><div class="info-lbl">ETA</div><div class="info-val cyan" id="i-eta">---</div></div>
+    <div class="info-block"><div class="info-lbl">MODE</div><div class="info-val white" id="i-mode">DRIVE</div></div>
+    <div class="info-block"><div class="info-lbl">LIVES</div><div class="info-val lives" id="i-lives">😮😮😮</div></div>
+    <div class="info-block"><div class="info-lbl">STATUS</div><div class="info-val sm" id="i-status">LOADING...</div></div>
+    <div class="ghost-legend">
+      <div class="legend-lbl">LEGEND</div>
+      <div class="legend-row"><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="#FFD700"/><polygon points="7,7 13,4 13,10" fill="#000"/></svg> YOU</div>
+      <div class="legend-row"><span style="color:#fff;font-size:8px">· · ·</span>&nbsp; YOUR PATH</div>
+      <div class="legend-row"><span style="font-size:11px">🍒</span>&nbsp; DESTINATION</div>
+      <div class="legend-row"><svg width="12" height="12" viewBox="0 0 14 14"><rect x="2" y="4" width="10" height="6" fill="#FF0000"/><rect x="3" y="5" width="2" height="2" fill="#fff"/><rect x="8" y="5" width="2" height="2" fill="#fff"/></svg>&nbsp; AVOID!</div>
+      <div class="legend-row"><span style="color:#4444ff">━</span>&nbsp; ALL ROADS</div>
+    </div>
+    <div class="turn-panel">
+      <div class="turn-hdr">DIRECTIONS</div>
+      <div id="turn-list"></div>
+    </div>
+    <div class="score-display">
+      <div class="score-lbl">SCORE</div>
+      <div class="score-num" id="map-score">000000</div>
+    </div>
+  </div>
+
+  <div id="map-container">
+    <div id="map"></div>
+    <!-- Score bar across top of map like original game -->
+    <div id="map-scorebar">
+      <span>1UP</span>
+      <span id="sb-score">000000</span>
+      <span>HIGH</span>
+      <span id="sb-high">000000</span>
+      <span id="sb-lives">😮😮😮</span>
+    </div>
+    <div class="map-hud" id="hud-tr" style="top:36px">LAT <span id="hud-lat">--</span><br>LNG <span id="hud-lng">--</span></div>
+    <div id="flash-overlay"></div>
+    <div id="game-msg">
+      <div class="msg-title" id="msg-title">GAME OVER</div>
+      <div class="msg-sub"  id="msg-sub">YOU RAN OUT OF LIVES</div>
+      <button class="msg-btn" onclick="retryGame()">▶ TRY AGAIN</button>
+      <button class="msg-btn" onclick="goToTitle()" style="font-size:7px;margin-top:-8px">◂ TITLE</button>
+    </div>
+    <div id="map-loading">
+      <div class="load-pac-wrap">
+        <svg width="44" height="44" viewBox="0 0 14 14" style="image-rendering:pixelated">
+          <circle cx="7" cy="7" r="6" fill="#FFD700"/><polygon points="7,7 13,3.5 13,10.5" fill="#000"/>
+        </svg>
+      </div>
+      <div class="load-txt" id="load-txt">LOADING ROADS...<br>THIS MAY TAKE<br>A FEW SECONDS</div>
+      <div class="load-bar"><div class="load-fill"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let navMode       = 'drive';
+let leafMap       = null;
+let mapReady      = false;
+let routeCoords   = [];
+let allRoadLayers = [];   // every street neon blue
+let routeDotMarkers = []; // white dots on route
+let ghostData     = [];   // {marker, lat, lng, dlat, dlng}
+let pacMarker     = null;
+let cherryMarker  = null;
+let score         = 0;
+let highScore     = 0;
+let lives         = 3;
+let originCoords  = null;
+let destCoords    = null;
+let gpsWatchId    = null;
+let pacPos        = null;
+let mouthOpen     = true;
+let mouthTimer    = null;
+let ghostMoveTimer= null;
+let gameActive    = false;
+let lastRot       = 0;
+let hitCooldown   = false; // prevents rapid ghost hits
+
+// ══════════════════════════════════════════
+// SCREENS
+// ══════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-map' && !mapReady) { initLeafMap(); mapReady = true; }
+}
+function goToTitle() { stopGame(); showScreen('screen-title'); }
+function goToDestScreen() { showScreen('screen-dest'); }
+function setMode(m) {
+  navMode = m;
+  document.getElementById('btn-drive').classList.toggle('active', m === 'drive');
+  document.getElementById('btn-walk').classList.toggle('active',  m === 'walk');
+}
+
+// ══════════════════════════════════════════
+// MAP INIT
+// ══════════════════════════════════════════
+function initLeafMap() {
+  leafMap = L.map('map', { zoomControl:true, attributionControl:false, zoomSnap:0.5 })
+             .setView([51.505,-0.09], 17);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(leafMap);
+  leafMap.on('mousemove', e => {
+    document.getElementById('hud-lat').textContent = e.latlng.lat.toFixed(4);
+    document.getElementById('hud-lng').textContent = e.latlng.lng.toFixed(4);
+  });
+}
+
+// ══════════════════════════════════════════
+// LAUNCH
+// ══════════════════════════════════════════
+async function launchMap() {
+  const oInput = document.getElementById('origin');
+  const dInput = document.getElementById('dest-input');
+  const oVal   = oInput.value.trim();
+  const dVal   = dInput.value.trim();
+  if (!oVal || !dVal) { alert('ENTER FROM AND TO LOCATIONS'); return; }
+  showScreen('screen-map');
+  document.getElementById('i-mode').textContent = navMode === 'drive' ? '🚗 DRIVE' : '🚶 WALK';
+  showLoading('GEOCODING LOCATIONS...');
+  try {
+    if (oInput.dataset.lat) originCoords = [parseFloat(oInput.dataset.lat), parseFloat(oInput.dataset.lng)];
+    else { const o = await geocode(oVal); originCoords = [o.lat, o.lng]; }
+    if (dInput.dataset.lat) destCoords = [parseFloat(dInput.dataset.lat), parseFloat(dInput.dataset.lng)];
+    else { const d = await geocode(dVal); destCoords = [d.lat, d.lng]; }
+    await startGame();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('load-txt').textContent = 'ERROR:\n' + e.message + '\n\nCheck console.';
+  }
+}
+
+// ══════════════════════════════════════════
+// START / RETRY GAME
+// ══════════════════════════════════════════
+async function startGame() {
+  stopGame();
+  clearMapLayers();
+  offRoadSegments = [];
+  lives = 3;
+  score = 0;
+  updateHUD();
+  document.getElementById('game-msg').classList.remove('show');
+  showLoading('FETCHING ROUTE...');
+  await buildRoute();
+  showLoading('DRAWING ALL ROADS...');
+  await drawAllRoads();
+  hideLoading();
+  // Place Pac-Man at origin
+  pacPos = [...originCoords];
+  placePacman(pacPos);
+  placeCherry(destCoords);
+  leafMap.setView(pacPos, 17);
+  // Start GPS
+  startGPS();
+  // Start mouth animation
+  mouthTimer = setInterval(() => {
+    mouthOpen = !mouthOpen;
+    if (pacMarker && pacPos) pacMarker.setIcon(makePacIcon(lastRot, mouthOpen));
+  }, 250);
+  // Start ghost patrol
+  startGhostPatrol();
+  gameActive = true;
+  setStatus('GO! FOLLOW THE DOTS!');
+  // Play intro jingle — must be triggered by user gesture (button press), so this is fine
+  playIntroJingle();
+}
+
+async function retryGame() {
+  document.getElementById('game-msg').classList.remove('show');
+  lives = 3;
+  score = 0;
+  updateHUD();
+  clearMapLayers();
+  offRoadSegments = [];
+  showLoading('RESETTING...');
+  await buildRoute();
+  await drawAllRoads();
+  hideLoading();
+  pacPos = [...originCoords];
+  placePacman(pacPos);
+  placeCherry(destCoords);
+  leafMap.setView(pacPos, 17);
+  startGPS();
+  mouthTimer = setInterval(() => {
+    mouthOpen = !mouthOpen;
+    if (pacMarker && pacPos) pacMarker.setIcon(makePacIcon(lastRot, mouthOpen));
+  }, 250);
+  startGhostPatrol();
+  gameActive = true;
+  setStatus('TRY AGAIN!');
+  playIntroJingle();
+}
+
+function stopGame() {
+  gameActive = false;
+  if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+  if (mouthTimer)      { clearInterval(mouthTimer);      mouthTimer = null; }
+  if (ghostMoveTimer)  { clearInterval(ghostMoveTimer);  ghostMoveTimer = null; }
+  stopWaka();
+}
+
+// ══════════════════════════════════════════
+// AUDIO ENGINE — Web Audio API (no files, no copyright)
+// ══════════════════════════════════════════
+let audioCtx = null;
+let wakaTimer = null;
+let wakaPhase = 0;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// Play a single tone: freq (Hz), type, duration (s), volume, startTime
+function playTone(freq, type, duration, volume, startTime, ctx) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startTime);
+  gain.gain.setValueAtTime(volume, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
+// ── INTRO JINGLE ─────────────────────────
+// Recreated from the classic Pac-Man intro melody (same notes, same feel)
+function playIntroJingle() {
+  const ctx = getAudioCtx();
+  const t   = ctx.currentTime + 0.1;
+  const vol = 0.18;
+  const sq  = 'square';
+
+  // Note frequencies
+  const B4=493.88, C5=523.25, D5=587.33, E5=659.25, F5=698.46,
+        G5=783.99, A5=880.00, Bb5=932.33, C6=1046.50,
+        A4=440.00, G4=392.00, F4=349.23, E4=329.63, D4=293.66;
+
+  // Classic intro sequence — note, duration pairs
+  const seq = [
+    [B4,0.10],[B4,0.10],[B4,0.10],
+    [B4,0.20],[Bb5,0.20],
+    [A5,0.20],[G5,0.20],
+    [Bb5,0.10],[A5,0.10],
+    [G5,0.30],
+    [E5,0.20],[C5,0.20],
+    [E5,0.10],[D5,0.10],
+    [C5,0.30],
+    [G4,0.10],[G4,0.10],[G4,0.10],
+    [G4,0.20],[F5,0.20],
+    [E5,0.20],[D5,0.20],
+    [F5,0.10],[E5,0.10],
+    [D5,0.30],
+    [B4,0.20],[G4,0.20],
+    [B4,0.10],[A4,0.10],[G4,0.10],
+    [A4,0.10],[B4,0.10],
+    [C5,0.40],
+  ];
+
+  let cursor = t;
+  for (const [freq, dur] of seq) {
+    playTone(freq, sq, dur * 0.85, vol, cursor, ctx);
+    cursor += dur;
+  }
+
+  // Bass line underneath
+  const bassSeq = [
+    [G3=196,0.40],[C4=261.63,0.40],[G3,0.40],[C4,0.40],
+    [F3=174.61,0.40],[Bb3=233.08,0.40],[F3,0.40],[Bb3,0.40],
+  ];
+  let bc = t;
+  for (const [freq, dur] of bassSeq) {
+    playTone(freq, 'triangle', dur * 0.7, 0.08, bc, ctx);
+    bc += dur;
+  }
+}
+
+// ── WAKA-WAKA ────────────────────────────
+// Alternating two-tone chomp, fires each time a dot is eaten
+function playWaka() {
+  const ctx  = getAudioCtx();
+  const t    = ctx.currentTime;
+  // Alternates between two pitches like the original
+  const freq = wakaPhase % 2 === 0 ? 220 : 165;
+  wakaPhase++;
+
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(freq * 2, t);
+  osc.frequency.exponentialRampToValueAtTime(freq, t + 0.06);
+  gain.gain.setValueAtTime(0.15, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  osc.start(t);
+  osc.stop(t + 0.1);
+}
+
+// ── GHOST HIT ────────────────────────────
+function playGhostHit() {
+  const ctx = getAudioCtx();
+  const t   = ctx.currentTime;
+  // Descending "death" sound
+  const freqs = [880, 660, 440, 330, 220, 165];
+  freqs.forEach((f, i) => {
+    playTone(f, 'sawtooth', 0.08, 0.2, t + i * 0.07, ctx);
+  });
+}
+
+// ── GAME OVER ────────────────────────────
+function playGameOver() {
+  const ctx = getAudioCtx();
+  const t   = ctx.currentTime + 0.1;
+  const seq = [
+    [494,0.15],[466,0.15],[440,0.15],[415,0.15],
+    [392,0.15],[370,0.15],[349,0.15],[330,0.30],
+  ];
+  let c = t;
+  for (const [freq, dur] of seq) {
+    playTone(freq, 'square', dur * 0.9, 0.18, c, ctx);
+    c += dur;
+  }
+}
+
+// ── WIN JINGLE ───────────────────────────
+function playWin() {
+  const ctx = getAudioCtx();
+  const t   = ctx.currentTime + 0.1;
+  const seq = [
+    [523,0.10],[659,0.10],[784,0.10],[1047,0.20],
+    [784,0.10],[1047,0.30],
+    [880,0.10],[1047,0.10],[1319,0.40],
+  ];
+  let c = t;
+  for (const [freq, dur] of seq) {
+    playTone(freq, 'square', dur * 0.85, 0.18, c, ctx);
+    c += dur;
+  }
+}
+
+function stopWaka() {
+  if (wakaTimer) { clearInterval(wakaTimer); wakaTimer = null; }
+}
+
+// ══════════════════════════════════════════
+// GPS TRACKING
+// ══════════════════════════════════════════
+function startGPS() {
+  if (!navigator.geolocation) { setStatus('GPS NOT AVAILABLE'); return; }
+  gpsWatchId = navigator.geolocation.watchPosition(
+    pos => onGPSUpdate(pos.coords.latitude, pos.coords.longitude),
+    err => { console.warn('GPS error', err); setStatus('GPS ERROR - CHECK PERMISSIONS'); },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+  );
+}
+
+function onGPSUpdate(lat, lng) {
+  if (!gameActive) return;
+  const newPos = [lat, lng];
+
+  // Direction for Pac-Man facing
+  if (pacPos) {
+    const dlat = lat - pacPos[0];
+    const dlng = lng - pacPos[1];
+    if (Math.abs(dlng) >= Math.abs(dlat)) lastRot = dlng >= 0 ? 0 : 180;
+    else lastRot = dlat >= 0 ? 270 : 90;
+  }
+
+  pacPos = newPos;
+  if (pacMarker) {
+    pacMarker.setLatLng(newPos);
+    pacMarker.setIcon(makePacIcon(lastRot, mouthOpen));
+  }
+
+  // Pan map to follow
+  leafMap.panTo(newPos, { animate:true, duration:0.3 });
+
+  // Eat nearby route dots
+  routeDotMarkers = routeDotMarkers.filter(dot => {
+    if (leafMap.distance(dot.getLatLng(), L.latLng(newPos)) < 20) {
+      leafMap.removeLayer(dot);
+      addScore(10);
+      playWaka();
+      return false;
+    }
+    return true;
+  });
+
+  // Check destination reached
+  if (leafMap.distance(L.latLng(newPos), L.latLng(destCoords)) < 40) {
+    onWin();
+    return;
+  }
+
+  // Check ghost collision
+  if (!hitCooldown) checkGhostCollision(newPos);
+
+  // Update parallel ghosts to track alongside Pac-Man
+  updateParallelGhosts(lat, lng);
+
+  updateHUD();
+}
+
+// ══════════════════════════════════════════
+// GHOST COLLISION
+// ══════════════════════════════════════════
+function checkGhostCollision(pos) {
+  for (const g of ghostData) {
+    const d = leafMap.distance(L.latLng(pos), L.latLng([g.lat, g.lng]));
+    if (d < 25) { // ~25m collision radius
+      onGhostHit();
+      return;
+    }
+  }
+}
+
+function onGhostHit() {
+  if (!gameActive || hitCooldown) return;
+  hitCooldown = true;
+  lives--;
+  updateHUD();
+  playGhostHit();
+  const flash = document.getElementById('flash-overlay');
+  flash.className = '';
+  void flash.offsetWidth;
+  flash.className = 'hit';
+  setStatus('HIT BY GHOST! ' + lives + ' LIVES LEFT');
+  // Reset Pac-Man to origin after brief pause
+  setTimeout(() => {
+    if (lives <= 0) {
+      onGameOver();
+    } else {
+      pacPos = [...originCoords];
+      if (pacMarker) { pacMarker.setLatLng(pacPos); pacMarker.setIcon(makePacIcon(0, true)); }
+      leafMap.setView(pacPos, 17);
+      // Restore dots
+      restoreRouteDots();
+      setStatus('BACK TO START! FOLLOW DOTS!');
+      setTimeout(() => { hitCooldown = false; }, 3000);
+    }
+  }, 800);
+}
+
+function onGameOver() {
+  stopGame();
+  if (score > highScore) highScore = score;
+  playGameOver();
+  document.getElementById('msg-title').textContent = 'GAME OVER';
+  document.getElementById('msg-sub').textContent   = 'SCORE: ' + String(score).padStart(6,'0');
+  document.getElementById('game-msg').classList.add('show');
+}
+
+function onWin() {
+  stopGame();
+  addScore(1000);
+  if (score > highScore) highScore = score;
+  playWin();
+  const flash = document.getElementById('flash-overlay');
+  flash.className = ''; void flash.offsetWidth; flash.className = 'win';
+  document.getElementById('msg-title').style.color = '#FFD700';
+  document.getElementById('msg-title').textContent = '🍒 ARRIVED!';
+  document.getElementById('msg-sub').textContent   = 'SCORE: ' + String(score).padStart(6,'0') + '\nROUTE COMPLETE!';
+  setTimeout(() => document.getElementById('game-msg').classList.add('show'), 600);
+}
+
+// ══════════════════════════════════════════
+// ROUTE
+// ══════════════════════════════════════════
+async function buildRoute() {
+  const profile = navMode === 'drive' ? 'driving' : 'foot';
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${originCoords[1]},${originCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson&steps=true`;
+  const res  = await fetch(url);
+  const data = await res.json();
+  if (data.code !== 'Ok') throw new Error('ROUTE FAILED');
+  const route = data.routes[0];
+  routeCoords = route.geometry.coordinates.map(c => [c[1],c[0]]);
+  const dist  = (route.distance/1000).toFixed(2)+' KM';
+  const mins  = Math.round(route.duration/60);
+  const eta   = mins >= 60 ? `${Math.floor(mins/60)}H ${mins%60}M` : `${mins}M`;
+  document.getElementById('i-dist').textContent = dist;
+  document.getElementById('i-eta').textContent  = eta;
+  buildTurnList(route.legs[0].steps);
+}
+
+// ══════════════════════════════════════════
+// DRAW ALL ROADS — uses OSM vector tiles (reliable, covers all visible streets)
+// ══════════════════════════════════════════
+async function drawAllRoads() {
+  showLoading('DRAWING STREET NETWORK...');
+
+  // Bounding box around route with generous padding
+  const lats = routeCoords.map(c=>c[0]);
+  const lngs = routeCoords.map(c=>c[1]);
+  const pad  = 0.008;
+  const s = Math.min(...lats)-pad, n = Math.max(...lats)+pad;
+  const w = Math.min(...lngs)-pad, e = Math.max(...lngs)+pad;
+
+  const routeSet = buildRouteSet();
+
+  // Try Overpass first with longer timeout and backup mirror
+  const query = `[out:json][timeout:40];way["highway"](${s},${w},${n},${e});out geom qt;`;
+
+  let elements = null;
+
+  // Try two Overpass mirrors
+  const mirrors = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+
+  for (const mirror of mirrors) {
+    try {
+      showLoading('LOADING STREETS FROM\n' + mirror.split('/')[2] + '...');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(mirror, {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (data.elements && data.elements.length > 0) {
+        elements = data.elements;
+        console.log('Overpass OK:', elements.length, 'roads from', mirror);
+        break;
+      }
+    } catch(e) {
+      console.warn('Overpass mirror failed:', mirror, e.message);
+    }
+  }
+
+  if (elements && elements.length > 0) {
+    // Draw every road
+    let roadCount = 0;
+    for (const el of elements) {
+      if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
+      const coords  = el.geometry.map(p => [p.lat, p.lon]);
+      const onRoute = isOnRoute(coords, routeSet);
+      drawNeonRoad(coords);
+      roadCount++;
+      if (!onRoute) {
+        storeOffRoadSegment(coords);
+        // Still place a few static initial ghosts so map isn't empty at start
+        if (Math.random() < 0.08 && ghostData.length < 4) {
+          const mid = coords[Math.floor(coords.length / 2)];
+          placeGhost(mid[0], mid[1], coords);
+        }
+      }
+    }
+    console.log('Drew', roadCount, 'neon roads');
+    setStatus('ROADS LOADED! ' + roadCount + ' STREETS');
+  } else {
+    // Both mirrors failed — use OSM tile overlay workaround:
+    // Draw route + attempt to show user what happened
+    console.warn('All Overpass mirrors failed. Drawing route only.');
+    drawNeonRoad(routeCoords);
+    placeGhostsFallback();
+    setStatus('STREET DATA UNAVAILABLE\nROUTE SHOWN ONLY');
+  }
+
+  // Always draw route dots last (on top of everything)
+  placeRouteDots();
+}
+
+// Draw a single road with full neon blue glow effect
+function drawNeonRoad(coords) {
+  const g1 = L.polyline(coords, { color:'#000055', weight:20, opacity:0.55, interactive:false }).addTo(leafMap);
+  const g2 = L.polyline(coords, { color:'#0000aa', weight:13, opacity:0.70, interactive:false }).addTo(leafMap);
+  const r  = L.polyline(coords, { color:'#000000', weight:7,  opacity:1,    interactive:false }).addTo(leafMap);
+  const n1 = L.polyline(coords, { color:'#3355ff', weight:2,  opacity:1,    interactive:false }).addTo(leafMap);
+  const n2 = L.polyline(coords, { color:'#99aaff', weight:1,  opacity:0.65, interactive:false }).addTo(leafMap);
+  allRoadLayers.push(g1, g2, r, n1, n2);
+}
+
+// Build a set of rounded lat/lng strings for route coords
+function buildRouteSet() {
+  const s = new Set();
+  routeCoords.forEach(c => s.add(Math.round(c[0]*1000)/1000 + ',' + Math.round(c[1]*1000)/1000));
+  return s;
+}
+
+// Check if an Overpass way overlaps the route
+function isOnRoute(wayCoords, routeSet) {
+  return wayCoords.some(c => {
+    const key = Math.round(c[0]*1000)/1000 + ',' + Math.round(c[1]*1000)/1000;
+    return routeSet.has(key);
+  });
+}
+
+function drawRouteFallback() {
+  drawNeonRoad(routeCoords);
+}
+
+// ══════════════════════════════════════════
+// ROUTE DOTS (white dots showing path direction)
+// ══════════════════════════════════════════
+function placeRouteDots() {
+  // Remove existing
+  routeDotMarkers.forEach(d => leafMap.removeLayer(d));
+  routeDotMarkers = [];
+  const step = Math.max(2, Math.floor(routeCoords.length / 60));
+  for (let i = step; i < routeCoords.length - 1; i += step) {
+    const dot = L.circleMarker(routeCoords[i], {
+      radius:4, color:'transparent',
+      fillColor:'#ffffff', fillOpacity:0.9, weight:0,
+    }).addTo(leafMap);
+    routeDotMarkers.push(dot);
+  }
+}
+
+function restoreRouteDots() {
+  placeRouteDots();
+}
+
+// ══════════════════════════════════════════
+// GHOSTS — parallel road tracking system
+// ══════════════════════════════════════════
+function ghostSvg(color) {
+  return `<svg width="28" height="28" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 10px ${color});animation:ghostBob 1s ease-in-out infinite alternate">
+    <rect x="3" y="3" width="8" height="1" fill="${color}"/>
+    <rect x="2" y="4" width="10" height="1" fill="${color}"/>
+    <rect x="1" y="5" width="12" height="5" fill="${color}"/>
+    <rect x="2" y="10" width="10" height="1" fill="${color}"/>
+    <rect x="3" y="5" width="3" height="3" fill="#fff"/>
+    <rect x="8" y="5" width="3" height="3" fill="#fff"/>
+    <rect x="5" y="6" width="1" height="2" fill="#2121DE"/>
+    <rect x="10" y="6" width="1" height="2" fill="#2121DE"/>
+    <rect x="2" y="11" width="2" height="2" fill="${color}"/>
+    <rect x="6" y="11" width="2" height="2" fill="${color}"/>
+    <rect x="10" y="11" width="2" height="2" fill="${color}"/>
+  </svg>`;
+}
+
+const GHOST_COLORS = ['#FF0000','#FFB8FF','#00FFFF','#FFB852'];
+let ghostColorIdx  = 0;
+let offRoadSegments = []; // all off-route road segments stored at load time
+
+// Called during drawAllRoads — store every off-route road segment
+function storeOffRoadSegment(coords) {
+  offRoadSegments.push(coords);
+}
+
+function placeGhost(lat, lng, roadCoords) {
+  const color = GHOST_COLORS[ghostColorIdx % GHOST_COLORS.length];
+  ghostColorIdx++;
+  const icon = L.divIcon({ html:ghostSvg(color), className:'', iconSize:[28,28], iconAnchor:[14,14] });
+  const marker = L.marker([lat,lng], { icon, zIndexOffset:300 }).addTo(leafMap);
+  const startIdx = Math.floor(roadCoords.length / 2);
+  ghostData.push({ marker, lat, lng, roadCoords, roadIdx:startIdx, dir:1, color });
+}
+
+function removeAllGhosts() {
+  ghostData.forEach(g => leafMap && leafMap.removeLayer(g.marker));
+  ghostData = [];
+  ghostColorIdx = 0;
+}
+
+// Find the closest point index on a road segment to a given position
+function closestIdxOnRoad(roadCoords, lat, lng) {
+  let bestIdx = 0, bestDist = Infinity;
+  roadCoords.forEach((pt, i) => {
+    const d = Math.hypot(pt[0]-lat, pt[1]-lng);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  });
+  return bestIdx;
+}
+
+// Main function: called every GPS update to reposition ghosts on parallel roads
+function updateParallelGhosts(pacLat, pacLng) {
+  if (!offRoadSegments.length) return;
+
+  // Lateral scan distance — roads within ~80m left/right count as parallel
+  const LATERAL_DEG = 0.0008; // ~80m
+  const AHEAD_DEG   = 0.012;  // ~1.2km look-ahead window
+
+  // Get Pac-Man's travel direction vector (from last few route coords near current pos)
+  // Use lastRot to determine axis: 0/180 = east/west travel, 90/270 = north/south
+  const movingEW = Math.abs(lastRot) < 45 || Math.abs(lastRot) > 135; // east-west dominant
+
+  // Find roads that run parallel (laterally close, longitudinally ahead/behind)
+  const parallelRoads = offRoadSegments.filter(seg => {
+    // Check midpoint of segment
+    const mid = seg[Math.floor(seg.length / 2)];
+    if (movingEW) {
+      // Travelling east/west — parallel roads are north/south of us (close in lat, within range in lng)
+      const latDiff = Math.abs(mid[0] - pacLat);
+      const lngDiff = Math.abs(mid[1] - pacLng);
+      return latDiff > 0.0001 && latDiff < LATERAL_DEG && lngDiff < AHEAD_DEG;
+    } else {
+      // Travelling north/south — parallel roads are east/west of us (close in lng, within range in lat)
+      const lngDiff = Math.abs(mid[1] - pacLng);
+      const latDiff = Math.abs(mid[0] - pacLat);
+      return lngDiff > 0.0001 && lngDiff < LATERAL_DEG && latDiff < AHEAD_DEG;
+    }
+  });
+
+  // We want 4 ghosts max: up to 2 each side, plus any already behind
+  const MAX_PARALLEL = 4;
+  const needed = Math.min(parallelRoads.length, MAX_PARALLEL);
+
+  // If ghost count matches, just update positions along their roads
+  // If roads changed significantly, reassign
+  if (ghostData.length !== needed + 1) { // +1 for the trailing ghost
+    removeAllGhosts();
+
+    // Place trailing ghost — behind Pac-Man on the route itself
+    const behindIdx = Math.max(0, findNearestRouteIdx(pacLat, pacLng) - 8);
+    const behindPt  = routeCoords[behindIdx];
+    const shortTrail = [
+      routeCoords[Math.max(0, behindIdx-3)],
+      routeCoords[Math.max(0, behindIdx-1)],
+      behindPt,
+      routeCoords[Math.min(routeCoords.length-1, behindIdx+1)],
+    ];
+    placeGhost(behindPt[0], behindPt[1], shortTrail);
+
+    // Place parallel ghosts
+    for (let i = 0; i < needed; i++) {
+      const seg    = parallelRoads[i];
+      const midIdx = closestIdxOnRoad(seg, pacLat, pacLng);
+      const mid    = seg[midIdx];
+      placeGhost(mid[0], mid[1], seg);
+    }
+  } else {
+    // Just advance each ghost along its road toward Pac-Man's longitudinal position
+    ghostData.forEach((g, gi) => {
+      if (!g.roadCoords || g.roadCoords.length < 2) return;
+      // Find closest point on this ghost's road to Pac-Man's position
+      const targetIdx = closestIdxOnRoad(g.roadCoords, pacLat, pacLng);
+      // Step toward target index
+      if (g.roadIdx < targetIdx) g.roadIdx = Math.min(g.roadIdx + 1, g.roadCoords.length - 1);
+      else if (g.roadIdx > targetIdx) g.roadIdx = Math.max(g.roadIdx - 1, 0);
+      const pt = g.roadCoords[g.roadIdx];
+      g.lat = pt[0]; g.lng = pt[1];
+      g.marker.setLatLng([g.lat, g.lng]);
+    });
+  }
+}
+
+// Find index of nearest route coordinate to given position
+function findNearestRouteIdx(lat, lng) {
+  let bestIdx = 0, bestDist = Infinity;
+  routeCoords.forEach((pt, i) => {
+    const d = Math.hypot(pt[0]-lat, pt[1]-lng);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  });
+  return bestIdx;
+}
+
+function placeGhostsFallback() {
+  const count = Math.min(4, Math.max(2, Math.floor(routeCoords.length / 10)));
+  for (let g = 0; g < count; g++) {
+    const idx = Math.floor((g + 1) * routeCoords.length / (count + 1));
+    const pt  = routeCoords[idx];
+    const off = (g % 2 === 0 ? 1 : -1) * 0.0006;
+    placeGhost(pt[0] + off, pt[1] + off * 0.8, [
+      [pt[0]+off-0.001, pt[1]], [pt[0]+off, pt[1]], [pt[0]+off+0.001, pt[1]]
+    ]);
+  }
+}
+
+// Ghost patrol tick — runs on interval, advances ghosts along their roads
+function startGhostPatrol() {
+  if (ghostMoveTimer) clearInterval(ghostMoveTimer);
+  ghostMoveTimer = setInterval(() => {
+    // Parallel ghost update is driven by GPS, not this timer
+    // This timer handles the trailing ghost bouncing animation
+    ghostData.forEach((g, i) => {
+      if (i === 0 && g.roadCoords) {
+        // Trailing ghost — keep behind on route
+        g.roadIdx += g.dir;
+        if (g.roadIdx >= g.roadCoords.length - 1) g.dir = -1;
+        if (g.roadIdx <= 0) g.dir = 1;
+        const pt = g.roadCoords[g.roadIdx];
+        g.lat = pt[0]; g.lng = pt[1];
+        g.marker.setLatLng([g.lat, g.lng]);
+      }
+    });
+  }, 600);
+}
+
+// ══════════════════════════════════════════
+// CHERRY
+// ══════════════════════════════════════════
+function placeCherry(coords) {
+  if (cherryMarker) leafMap.removeLayer(cherryMarker);
+  const svg = `<svg width="34" height="34" viewBox="0 0 16 16" style="image-rendering:pixelated;filter:drop-shadow(0 0 8px #ff0055) drop-shadow(0 0 16px #ff0055);animation:cherryPulse 1s ease-in-out infinite alternate">
+    <rect x="7" y="2" width="1" height="4" fill="#00bb00"/><rect x="9" y="1" width="1" height="5" fill="#00bb00"/><rect x="7" y="2" width="3" height="1" fill="#00bb00"/>
+    <rect x="4" y="6" width="4" height="4" fill="#CC0000"/><rect x="3" y="7" width="6" height="2" fill="#CC0000"/><rect x="5" y="7" width="1" height="1" fill="#ff7777"/>
+    <rect x="9" y="6" width="4" height="4" fill="#CC0000"/><rect x="8" y="7" width="6" height="2" fill="#CC0000"/><rect x="10" y="7" width="1" height="1" fill="#ff7777"/>
+  </svg>`;
+  const icon = L.divIcon({ html:svg, className:'', iconSize:[34,34], iconAnchor:[17,17] });
+  cherryMarker = L.marker(coords, { icon, zIndexOffset:500 }).addTo(leafMap);
+}
+
+// ══════════════════════════════════════════
+// PAC-MAN
+// ══════════════════════════════════════════
+function makePacIcon(rot, open) {
+  const mouth = open
+    ? `<polygon points="7,7 13,3.5 13,10.5" fill="#000"/>`
+    : `<polygon points="7,7 13,6 13,8" fill="#000"/>`;
+  return L.divIcon({
+    html:`<svg width="32" height="32" viewBox="0 0 14 14" style="image-rendering:pixelated;transform:rotate(${rot}deg);filter:drop-shadow(0 0 12px #FFD700) drop-shadow(0 0 24px rgba(255,215,0,.4))">
+      <circle cx="7" cy="7" r="6" fill="#FFD700"/>${mouth}
+    </svg>`,
+    className:'', iconSize:[32,32], iconAnchor:[16,16],
+  });
+}
+
+function placePacman(coords) {
+  if (pacMarker) leafMap.removeLayer(pacMarker);
+  pacMarker = L.marker(coords, { icon:makePacIcon(0,true), zIndexOffset:700 }).addTo(leafMap);
+}
+
+// ══════════════════════════════════════════
+// TURN LIST
+// ══════════════════════════════════════════
+function buildTurnList(steps) {
+  const list = document.getElementById('turn-list');
+  list.innerHTML = '';
+  steps.forEach((step,i) => {
+    const div  = document.createElement('div');
+    div.className = 'turn-step'+(i===0?' now':'');
+    const type = step.maneuver.type.replace(/-/g,' ').toUpperCase();
+    const dist = step.distance>999?(step.distance/1000).toFixed(1)+'KM':Math.round(step.distance)+'M';
+    const name = (step.name||'ROAD').toUpperCase().slice(0,15);
+    div.innerHTML = `${String(i+1).padStart(2,'0')}. ${type}<br><span style="color:#222288">▸ ${name} [${dist}]</span>`;
+    list.appendChild(div);
+  });
+}
+
+// ══════════════════════════════════════════
+// CLEAR
+// ══════════════════════════════════════════
+function clearMapLayers() {
+  allRoadLayers.forEach(l => leafMap && leafMap.removeLayer(l));
+  routeDotMarkers.forEach(l => leafMap && leafMap.removeLayer(l));
+  ghostData.forEach(g => leafMap && leafMap.removeLayer(g.marker));
+  if (pacMarker)    leafMap.removeLayer(pacMarker);
+  if (cherryMarker) leafMap.removeLayer(cherryMarker);
+  allRoadLayers=[]; routeDotMarkers=[]; ghostData=[]; ghostColorIdx=0;
+  pacMarker=cherryMarker=null;
+}
+
+// ══════════════════════════════════════════
+// HUD
+// ══════════════════════════════════════════
+function updateHUD() {
+  const s = String(score).padStart(6,'0');
+  const h = String(highScore).padStart(6,'0');
+  const l = '😮'.repeat(Math.max(0,lives));
+  document.getElementById('map-score').textContent = s;
+  document.getElementById('sb-score').textContent  = s;
+  document.getElementById('sb-high').textContent   = h;
+  document.getElementById('sb-lives').textContent  = l;
+  document.getElementById('i-lives').textContent   = l;
+}
+function addScore(n) { score+=n; updateHUD(); }
+function setStatus(msg) { document.getElementById('i-status').textContent = msg; }
+function showLoading(msg) {
+  document.getElementById('load-txt').textContent = msg;
+  document.getElementById('map-loading').classList.remove('hidden');
+}
+function hideLoading() { document.getElementById('map-loading').classList.add('hidden'); }
+
+// ══════════════════════════════════════════
+// GEOCODE
+// ══════════════════════════════════════════
+async function geocode(q) {
+  try {
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`);
+    const d = await r.json();
+    if (d.features?.length) { const f=d.features[0]; return { lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0] }; }
+  } catch(e) { console.warn('Photon failed',e); }
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+  const d = await r.json();
+  if (!d.length) throw new Error('NOT FOUND: '+q);
+  return { lat:parseFloat(d[0].lat), lng:parseFloat(d[0].lon) };
+}
+
+// ══════════════════════════════════════════
+// AUTOCOMPLETE
+// ══════════════════════════════════════════
+async function fetchSuggestions(q) {
+  if (q.length<3) return [];
+  try {
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5`);
+    const d = await r.json();
+    return (d.features||[]).map(f => {
+      const p=f.properties;
+      return { label:[p.name,p.city,p.state,p.country].filter(Boolean).join(', '), lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0] };
+    });
+  } catch(e) { return []; }
+}
+
+function attachAutocomplete(inputId, listId) {
+  const input=document.getElementById(inputId), list=document.getElementById(listId);
+  let timer=null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer); delete input.dataset.lat; delete input.dataset.lng;
+    const q=input.value.trim(); if(q.length<3){list.innerHTML='';list.style.display='none';return;}
+    timer=setTimeout(async()=>{
+      const sugs=await fetchSuggestions(q);
+      if(!sugs.length){list.innerHTML='';list.style.display='none';return;}
+      list.innerHTML=sugs.map(s=>`<div class="suggest-item" data-lat="${s.lat}" data-lng="${s.lng}" data-label="${s.label.replace(/"/g,'&quot;')}">${s.label.toUpperCase().slice(0,50)}</div>`).join('');
+      list.style.display='block';
+      list.querySelectorAll('.suggest-item').forEach(item=>item.addEventListener('click',()=>{
+        input.value=item.dataset.label; input.dataset.lat=item.dataset.lat; input.dataset.lng=item.dataset.lng;
+        list.innerHTML=''; list.style.display='none';
+      }));
+    },250);
+  });
+  input.addEventListener('blur',()=>setTimeout(()=>{list.style.display='none';},200));
+}
+
+// ══════════════════════════════════════════
+// KEYBOARD + INIT
+// ══════════════════════════════════════════
+document.getElementById('origin').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('dest-input').focus(); });
+document.getElementById('dest-input').addEventListener('keydown', e=>{ if(e.key==='Enter') launchMap(); });
+attachAutocomplete('origin','suggest-origin');
+attachAutocomplete('dest-input','suggest-dest');
+</script>
+</body>
+</html>
