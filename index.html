@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>PAC-MAP</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -65,7 +65,31 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 .suggest-item{ font-family:'Press Start 2P',monospace; font-size:6px; padding:8px 10px; color:#FFD700; cursor:pointer; border-bottom:1px solid #1a1a44; letter-spacing:1px; line-height:1.6; }
 .suggest-item:hover{ background:#1a1a44; color:#00FFFF; }
 
-/* ══ MAP SCREEN ══ */
+/* ══ MOBILE FIXES ══ */
+@media (max-width: 600px) {
+  #screen-dest { justify-content:flex-start; padding-top:20px; overflow-y:auto; }
+  .dest-box { width:94vw; padding:16px; gap:12px; }
+  .dest-title { font-size:11px; }
+  .pac-input { font-size:7px; padding:10px 8px; }
+  .mode-pill { font-size:7px; padding:10px 4px; }
+  .start-btn { font-size:10px; padding:13px; }
+  .field-label { font-size:6px; }
+  #info-panel { width:140px; }
+  .info-logo { font-size:14px; }
+  .info-lbl { font-size:8px; }
+  .info-val { font-size:14px; }
+  .info-val.white { font-size:10px; }
+  .info-val.sm { font-size:9px; }
+  .info-val.lives { font-size:14px; }
+  .legend-lbl { font-size:8px; }
+  .legend-row { font-size:8px; }
+  .turn-hdr { font-size:8px; }
+  .turn-step { font-size:8px; }
+  .score-lbl { font-size:8px; }
+  .score-num { font-size:18px; }
+  #map-scorebar span { font-size:10px; }
+  #sb-lives { font-size:14px; }
+}
 #screen-map{ flex-direction:row; align-items:stretch; justify-content:flex-start; padding:0; }
 #info-panel{ width:240px; flex-shrink:0; background:#000; border-right:3px solid #4444ff; box-shadow:2px 0 14px rgba(68,68,255,.4); display:flex; flex-direction:column; overflow:hidden; }
 .info-logo{ font-size:20px; color:#FFD700; text-shadow:0 0 10px #FFD700; text-align:center; padding:14px 6px 12px; border-bottom:2px solid #4444ff; letter-spacing:2px; }
@@ -219,6 +243,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
       </div>
     </div>
     <button class="start-btn" onclick="launchMap()">▶ START GAME</button>
+    <button class="start-btn" style="font-size:9px;margin-top:-8px;border-color:#00FFFF;color:#00FFFF;text-shadow:0 0 8px #00FFFF" onclick="requestGPS()">◎ ENABLE GPS FIRST</button>
   </div>
   <button class="back-btn" onclick="goToTitle()">◂ BACK</button>
 </div>
@@ -574,6 +599,29 @@ function playWin() {
 
 function stopWaka() {
   if (wakaTimer) { clearInterval(wakaTimer); wakaTimer = null; }
+}
+
+// ══════════════════════════════════════════
+// ══ GPS PERMISSION REQUEST ══
+function requestGPS() {
+  if (!navigator.geolocation) { alert('GPS NOT SUPPORTED ON THIS DEVICE'); return; }
+  const btn = document.querySelector('button[onclick="requestGPS()"]');
+  btn.textContent = '◎ REQUESTING GPS...';
+  navigator.geolocation.getCurrentPosition(
+    () => {
+      btn.textContent = '✓ GPS ENABLED!';
+      btn.style.borderColor = '#00FF41';
+      btn.style.color = '#00FF41';
+      btn.style.textShadow = '0 0 8px #00FF41';
+    },
+    err => {
+      btn.textContent = '✗ GPS DENIED - CHECK SETTINGS';
+      btn.style.borderColor = '#FF0000';
+      btn.style.color = '#FF0000';
+      if (err.code === 1) alert('LOCATION BLOCKED\n\niPhone: Settings → Chrome → Location → Allow\nAndroid: Settings → Apps → Chrome → Permissions → Location → Allow');
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
 }
 
 // ══════════════════════════════════════════
