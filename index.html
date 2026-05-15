@@ -993,7 +993,7 @@ async function drawAllRoads() {
   const routeSet = buildRouteSet();
 
   // Try Overpass first with longer timeout and backup mirror
-  const query = `[out:json][timeout:40];way["highway"](${s},${w},${n},${e});out geom qt;`;
+  const query = `[out:json][timeout:40];way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|footway|cycleway|path|trunk|motorway)$"](${s},${w},${n},${e});out geom qt;`;
 
   let elements = null;
 
@@ -1060,13 +1060,13 @@ async function drawAllRoads() {
 }
 
 function drawNeonRoad(coords) {
-  // Outer glow halos (wider)
-  const g1 = L.polyline(coords, { color:'#000055', weight:14, opacity:0.55, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
-  const g2 = L.polyline(coords, { color:'#0000aa', weight:10, opacity:0.70, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
-  // Bright neon edge (thinner than black fill so edges show)
-  const edge = L.polyline(coords, { color:'#3355ff', weight:7, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
-  // Black centre fill (covers everything inside leaving only outer rim visible)
-  const black = L.polyline(coords, { color:'#000000', weight:5, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  // Outer glow halos
+  const g1 = L.polyline(coords, { color:'#000055', weight:16, opacity:0.55, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  const g2 = L.polyline(coords, { color:'#0000aa', weight:11, opacity:0.70, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  // Bright neon edge
+  const edge = L.polyline(coords, { color:'#3355ff', weight:8, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  // Black centre — wide enough to cover dual carriageway gaps
+  const black = L.polyline(coords, { color:'#000000', weight:7, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
   allRoadLayers.push(g1, g2, edge, black);
 }
 
