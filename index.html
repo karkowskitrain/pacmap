@@ -41,7 +41,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 .legend-table{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
 .legend-line{ display:flex; align-items:center; gap:8px; font-size:8px; letter-spacing:1px; }
 .leg-text{ color:#fff; min-width:50px; }
-.leg-pts{ color:#FFD700; }
+.leg-pts{ color:#FFD700; min-width:60px; text-align:right; }
 .char-table{ display:flex; flex-direction:column; gap:8px; margin-bottom:0; }
 .char-row{ display:flex; align-items:center; gap:8px; }
 .c-name{ font-size:8px; min-width:78px; letter-spacing:1px; }
@@ -248,7 +248,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 
     <!-- LEFT: Character / Nickname -->
     <div class="title-col-left">
-      <div class="char-header">CHARACTER &nbsp;/&nbsp; NICKNAME</div>
+      <div class="char-header">CHARACTER</div>
       <div class="char-table">
         <div class="char-row">
           <svg width="26" height="26" viewBox="0 0 14 14" style="image-rendering:pixelated;filter:drop-shadow(0 0 4px #FF0000)">
@@ -291,7 +291,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 
     <!-- RIGHT: Game legend / details -->
     <div class="title-col-right">
-      <div class="char-header">LEGEND &nbsp;/&nbsp; PTS</div>
+      <div class="char-header">LEGEND</div>
       <div class="legend-table">
         <div class="legend-line">
           <svg width="20" height="20" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="#FFD700"/><polygon points="7,7 13,4 13,10" fill="#000"/></svg>
@@ -307,7 +307,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
         </div>
         <div class="legend-line">
           <span style="font-size:18px">🍒</span>
-          <span class="leg-text">GOAL</span><span class="leg-pts">1000</span>
+          <span class="leg-text">GOAL</span><span class="leg-pts">1000 PTS</span>
         </div>
         <div class="legend-line">
           <svg width="20" height="20" viewBox="0 0 14 14" style="image-rendering:pixelated">
@@ -316,12 +316,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
           </svg>
           <span class="leg-text">AVOID</span>
         </div>
-        <div class="legend-line">
-          <svg width="20" height="6"><rect x="0" y="2" width="20" height="2" fill="#4444ff"/></svg>
-          <span class="leg-text">ROADS</span>
-        </div>
       </div>
-      <div class="namco">namco ®</div>
     </div>
 
   </div>
@@ -1065,13 +1060,15 @@ async function drawAllRoads() {
   placeRouteDots();
 }
 
-// Draw a single road with full neon blue glow effect
 function drawNeonRoad(coords) {
-  const g1 = L.polyline(coords, { color:'#000055', weight:20, opacity:0.55, interactive:false }).addTo(leafMap);
-  const g2 = L.polyline(coords, { color:'#0000aa', weight:13, opacity:0.70, interactive:false }).addTo(leafMap);
-  const r  = L.polyline(coords, { color:'#000000', weight:7,  opacity:1,    interactive:false }).addTo(leafMap);
-  const n1 = L.polyline(coords, { color:'#3355ff', weight:2,  opacity:1,    interactive:false }).addTo(leafMap);
-  allRoadLayers.push(g1, g2, r, n1);
+  // Outer glow halos (wider)
+  const g1 = L.polyline(coords, { color:'#000055', weight:14, opacity:0.55, interactive:false }).addTo(leafMap);
+  const g2 = L.polyline(coords, { color:'#0000aa', weight:10, opacity:0.70, interactive:false }).addTo(leafMap);
+  // Bright neon edge (thinner than black fill so edges show)
+  const edge = L.polyline(coords, { color:'#3355ff', weight:7, opacity:1, interactive:false }).addTo(leafMap);
+  // Black centre fill (covers everything inside leaving only outer rim visible)
+  const black = L.polyline(coords, { color:'#000000', weight:5, opacity:1, interactive:false }).addTo(leafMap);
+  allRoadLayers.push(g1, g2, edge, black);
 }
 
 // Build a set of rounded lat/lng strings for route coords
