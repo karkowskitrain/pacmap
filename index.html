@@ -897,6 +897,9 @@ function onGPSUpdate(lat, lng) {
     return;
   }
 
+  // Update parallel ghosts to track alongside Pac-Man
+  updateParallelGhosts(lat, lng);
+
   updateHUD();
 }
 
@@ -1152,28 +1155,25 @@ function closestIdxOnRoad(roadCoords, lat, lng) {
 function updateParallelGhosts(pacLat, pacLng) {
   if (!offRoadSegments.length) return;
 
-  // Lateral scan distance — roads within ~80m left/right count as parallel
-  const LATERAL_DEG = 0.0008; // ~80m
-  const AHEAD_DEG   = 0.012;  // ~1.2km look-ahead window
+  // Lateral scan distance — roads within ~30m left/right (next street over)
+  const LATERAL_DEG     = 0.00035; // ~35m sideways
+  const LATERAL_MIN_DEG = 0.00008; // min 8m to avoid grabbing the current road
+  const AHEAD_DEG       = 0.003;   // ~300m ahead/behind window
 
-  // Get Pac-Man's travel direction vector (from last few route coords near current pos)
   // Use lastRot to determine axis: 0/180 = east/west travel, 90/270 = north/south
-  const movingEW = Math.abs(lastRot) < 45 || Math.abs(lastRot) > 135; // east-west dominant
+  const movingEW = Math.abs(lastRot) < 45 || Math.abs(lastRot) > 135;
 
-  // Find roads that run parallel (laterally close, longitudinally ahead/behind)
+  // Find roads that run parallel (laterally close, longitudinally near us)
   const parallelRoads = offRoadSegments.filter(seg => {
-    // Check midpoint of segment
     const mid = seg[Math.floor(seg.length / 2)];
     if (movingEW) {
-      // Travelling east/west — parallel roads are north/south of us (close in lat, within range in lng)
       const latDiff = Math.abs(mid[0] - pacLat);
       const lngDiff = Math.abs(mid[1] - pacLng);
-      return latDiff > 0.0001 && latDiff < LATERAL_DEG && lngDiff < AHEAD_DEG;
+      return latDiff > LATERAL_MIN_DEG && latDiff < LATERAL_DEG && lngDiff < AHEAD_DEG;
     } else {
-      // Travelling north/south — parallel roads are east/west of us (close in lng, within range in lat)
       const lngDiff = Math.abs(mid[1] - pacLng);
       const latDiff = Math.abs(mid[0] - pacLat);
-      return lngDiff > 0.0001 && lngDiff < LATERAL_DEG && latDiff < AHEAD_DEG;
+      return lngDiff > LATERAL_MIN_DEG && lngDiff < LATERAL_DEG && latDiff < AHEAD_DEG;
     }
   });
 
