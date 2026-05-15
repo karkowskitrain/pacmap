@@ -64,6 +64,17 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 .start-btn:hover{ background:#FFD700; color:#000; text-shadow:none; box-shadow:0 0 20px #FFD700; }
 .back-btn{ font-family:'Press Start 2P',monospace; font-size:7px; background:transparent; border:none; color:#333366; cursor:pointer; }
 .back-btn:hover{ color:#fff; }
+.tab-btn{ flex:1; font-family:'Press Start 2P',monospace; font-size:7px; padding:8px 4px; border:2px solid #222266; background:transparent; color:#444466; cursor:pointer; letter-spacing:1px; transition:all .1s; }
+.tab-btn.active{ border-color:#FFD700; color:#FFD700; background:rgba(255,215,0,.07); box-shadow:0 0 8px rgba(255,215,0,.2); }
+.tab-panel{ border:2px solid #222266; border-top:none; background:#000; }
+.saved-list{ max-height:110px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#4444ff #000; }
+.saved-empty{ font-size:6px; color:#333355; padding:10px; text-align:center; letter-spacing:1px; }
+.saved-item{ display:flex; align-items:center; justify-content:space-between; font-size:6px; color:#FFD700; padding:7px 10px; border-bottom:1px solid #0d0d22; cursor:pointer; letter-spacing:0.5px; transition:background .1s; }
+.saved-item:hover{ background:#111122; }
+.saved-item .si-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.saved-item .si-del{ color:#FF0000; font-size:10px; padding-left:8px; flex-shrink:0; }
+.fav-add-btn{ width:100%; font-family:'Press Start 2P',monospace; font-size:6px; padding:8px; border:none; border-top:1px solid #222266; background:rgba(255,215,0,.06); color:#FFD700; cursor:pointer; letter-spacing:1px; transition:all .1s; }
+.fav-add-btn:hover{ background:rgba(255,215,0,.14); }
 .suggest-list{ position:absolute; top:100%; left:0; right:0; background:#000; border:2px solid #4444ff; border-top:none; max-height:180px; overflow-y:auto; z-index:100; display:none; box-shadow:0 4px 12px rgba(68,68,255,.4); }
 .suggest-item{ font-family:'Press Start 2P',monospace; font-size:6px; padding:8px 10px; color:#FFD700; cursor:pointer; border-bottom:1px solid #1a1a44; letter-spacing:1px; line-height:1.6; }
 .suggest-item:hover{ background:#1a1a44; color:#00FFFF; }
@@ -281,17 +292,61 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 <div id="screen-dest" class="screen">
   <div class="dest-title">INSERT DESTINATION</div>
   <div class="dest-box">
+
+    <!-- FROM -->
     <div style="position:relative">
       <div class="field-label">▸ FROM</div>
       <input class="pac-input" id="origin" placeholder="📍 LOCATING YOU..." autocomplete="off" readonly style="color:#00FFFF;font-size:6px"/>
       <div class="suggest-list" id="suggest-origin"></div>
       <div style="font-size:5px;color:#444466;margin-top:3px;letter-spacing:1px">TAP TO ENTER MANUALLY</div>
     </div>
+
+    <!-- TO with voice button -->
     <div style="position:relative">
       <div class="field-label">▸ TO</div>
-      <input class="pac-input" id="dest-input" placeholder="DESTINATION..." autocomplete="off"/>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="pac-input" id="dest-input" placeholder="DESTINATION..." autocomplete="off" style="flex:1"/>
+        <button id="voice-btn" onclick="startVoice()" title="Voice input" style="
+          font-family:'Press Start 2P',monospace;
+          font-size:14px;
+          background:transparent;
+          border:2px solid #4444ff;
+          color:#4444ff;
+          padding:8px 10px;
+          cursor:pointer;
+          flex-shrink:0;
+          box-shadow:0 0 8px rgba(68,68,255,.4);
+          transition:all .15s;
+        ">🎤</button>
+      </div>
       <div class="suggest-list" id="suggest-dest"></div>
+      <div id="voice-status" style="font-size:5px;color:#4444ff;margin-top:3px;letter-spacing:1px;min-height:8px;animation:blink .7s step-end infinite;display:none">🎤 LISTENING...</div>
     </div>
+
+    <!-- TABS: RECENT / FAVOURITES -->
+    <div>
+      <div style="display:flex;gap:0;margin-bottom:0">
+        <button class="tab-btn active" id="tab-recent"    onclick="switchTab('recent')">⏱ RECENT</button>
+        <button class="tab-btn"        id="tab-favs"      onclick="switchTab('favs')">⭐ FAVOURITES</button>
+      </div>
+
+      <!-- Recent list -->
+      <div id="panel-recent" class="tab-panel">
+        <div id="recent-list" class="saved-list">
+          <div class="saved-empty">NO RECENT DESTINATIONS</div>
+        </div>
+      </div>
+
+      <!-- Favourites list -->
+      <div id="panel-favs" class="tab-panel" style="display:none">
+        <div id="favs-list" class="saved-list">
+          <div class="saved-empty">NO FAVOURITES YET</div>
+        </div>
+        <button class="fav-add-btn" onclick="addCurrentAsFav()">⭐ SAVE CURRENT DESTINATION</button>
+      </div>
+    </div>
+
+    <!-- MODE -->
     <div>
       <div class="field-label">▸ MODE</div>
       <div class="mode-row">
@@ -299,6 +354,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
         <button class="mode-pill"        id="btn-walk"  onclick="setMode('walk')">🚶 WALK</button>
       </div>
     </div>
+
     <button class="start-btn" onclick="launchMap()">▶ START GAME</button>
     <button class="start-btn" style="font-size:9px;margin-top:-8px;border-color:#00FFFF;color:#00FFFF;text-shadow:0 0 8px #00FFFF" onclick="requestGPS()">◎ ENABLE GPS FIRST</button>
   </div>
@@ -400,6 +456,7 @@ function goToTitle() { stopGame(); showScreen('screen-title'); }
 function goToDestScreen() {
   showScreen('screen-dest');
   autoLocateOrigin();
+  renderSavedLists();
 }
 
 // Auto-fill FROM with current GPS position
@@ -491,8 +548,14 @@ async function launchMap() {
   try {
     if (oInput.dataset.lat) originCoords = [parseFloat(oInput.dataset.lat), parseFloat(oInput.dataset.lng)];
     else { const o = await geocode(oVal); originCoords = [o.lat, o.lng]; }
-    if (dInput.dataset.lat) destCoords = [parseFloat(dInput.dataset.lat), parseFloat(dInput.dataset.lng)];
-    else { const d = await geocode(dVal); destCoords = [d.lat, d.lng]; }
+    if (dInput.dataset.lat) {
+      destCoords = [parseFloat(dInput.dataset.lat), parseFloat(dInput.dataset.lng)];
+      addToRecent(dVal, destCoords[0], destCoords[1]);
+    } else {
+      const d = await geocode(dVal);
+      destCoords = [d.lat, d.lng];
+      addToRecent(dVal, destCoords[0], destCoords[1]);
+    }
     await startGame();
   } catch(e) {
     console.error(e);
@@ -1316,6 +1379,146 @@ function attachAutocomplete(inputId, listId) {
     },250);
   });
   input.addEventListener('blur',()=>setTimeout(()=>{list.style.display='none';},200));
+}
+
+// ══════════════════════════════════════════
+// RECENT & FAVOURITES (localStorage)
+// ══════════════════════════════════════════
+function getRecent() { try { return JSON.parse(localStorage.getItem('pacmap_recent')||'[]'); } catch(e){ return []; } }
+function getFavs()   { try { return JSON.parse(localStorage.getItem('pacmap_favs')||'[]');   } catch(e){ return []; } }
+function saveRecent(list) { localStorage.setItem('pacmap_recent', JSON.stringify(list)); }
+function saveFavs(list)   { localStorage.setItem('pacmap_favs',   JSON.stringify(list)); }
+
+function addToRecent(label, lat, lng) {
+  let list = getRecent().filter(r => r.label !== label);
+  list.unshift({ label, lat, lng });
+  if (list.length > 8) list = list.slice(0, 8);
+  saveRecent(list);
+}
+
+function renderRecent() {
+  const list = getRecent();
+  const el   = document.getElementById('recent-list');
+  if (!list.length) { el.innerHTML = '<div class="saved-empty">NO RECENT DESTINATIONS</div>'; return; }
+  el.innerHTML = list.map((r,i) => `
+    <div class="saved-item" onclick="selectSaved('${r.label.replace(/'/g,"\\'")}',${r.lat},${r.lng})">
+      <span class="si-name">⏱ ${r.label.toUpperCase()}</span>
+      <span class="si-del" onclick="event.stopPropagation();deleteRecent(${i})">✕</span>
+    </div>`).join('');
+}
+
+function renderFavs() {
+  const list = getFavs();
+  const el   = document.getElementById('favs-list');
+  if (!list.length) { el.innerHTML = '<div class="saved-empty">NO FAVOURITES YET</div>'; return; }
+  el.innerHTML = list.map((r,i) => `
+    <div class="saved-item" onclick="selectSaved('${r.label.replace(/'/g,"\\'")}',${r.lat},${r.lng})">
+      <span class="si-name">⭐ ${r.label.toUpperCase()}</span>
+      <span class="si-del" onclick="event.stopPropagation();deleteFav(${i})">✕</span>
+    </div>`).join('');
+}
+
+function selectSaved(label, lat, lng) {
+  const input = document.getElementById('dest-input');
+  input.value = label;
+  input.dataset.lat = lat;
+  input.dataset.lng = lng;
+}
+
+function deleteRecent(i) {
+  const list = getRecent(); list.splice(i,1); saveRecent(list); renderRecent();
+}
+function deleteFav(i) {
+  const list = getFavs(); list.splice(i,1); saveFavs(list); renderFavs();
+}
+
+function addCurrentAsFav() {
+  const input = document.getElementById('dest-input');
+  const label = input.value.trim();
+  const lat   = input.dataset.lat;
+  const lng   = input.dataset.lng;
+  if (!label || !lat) { alert('ENTER A DESTINATION FIRST'); return; }
+  let list = getFavs().filter(f => f.label !== label);
+  list.unshift({ label, lat: parseFloat(lat), lng: parseFloat(lng) });
+  saveFavs(list);
+  renderFavs();
+  switchTab('favs');
+}
+
+function switchTab(tab) {
+  document.getElementById('tab-recent').classList.toggle('active', tab==='recent');
+  document.getElementById('tab-favs').classList.toggle('active',   tab==='favs');
+  document.getElementById('panel-recent').style.display = tab==='recent' ? 'block' : 'none';
+  document.getElementById('panel-favs').style.display   = tab==='favs'   ? 'block' : 'none';
+}
+
+// Render lists whenever dest screen is shown
+const _origGoToDest = goToDestScreen;
+// Override already defined above — patch renderLists into autoLocateOrigin call
+function renderSavedLists() { renderRecent(); renderFavs(); }
+
+// ══════════════════════════════════════════
+// VOICE INPUT
+// ══════════════════════════════════════════
+let recognition = null;
+
+function startVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { alert('VOICE NOT SUPPORTED IN THIS BROWSER\nTRY CHROME'); return; }
+
+  const btn    = document.getElementById('voice-btn');
+  const status = document.getElementById('voice-status');
+  const input  = document.getElementById('dest-input');
+
+  if (recognition) { recognition.stop(); recognition = null; return; }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-GB';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => {
+    btn.style.borderColor = '#FF0000';
+    btn.style.color = '#FF0000';
+    btn.style.boxShadow = '0 0 12px rgba(255,0,0,.6)';
+    status.style.display = 'block';
+  };
+
+  recognition.onresult = e => {
+    const transcript = e.results[0][0].transcript.trim();
+    input.value = transcript;
+    delete input.dataset.lat;
+    delete input.dataset.lng;
+    status.style.display = 'none';
+    // Trigger autocomplete lookup
+    fetchSuggestions(transcript).then(sugs => {
+      if (sugs.length) {
+        input.dataset.lat = sugs[0].lat;
+        input.dataset.lng = sugs[0].lng;
+        input.value = sugs[0].label;
+      }
+    });
+  };
+
+  recognition.onerror = () => {
+    status.style.display = 'none';
+    resetVoiceBtn();
+  };
+
+  recognition.onend = () => {
+    status.style.display = 'none';
+    resetVoiceBtn();
+    recognition = null;
+  };
+
+  recognition.start();
+}
+
+function resetVoiceBtn() {
+  const btn = document.getElementById('voice-btn');
+  btn.style.borderColor = '#4444ff';
+  btn.style.color = '#4444ff';
+  btn.style.boxShadow = '0 0 8px rgba(68,68,255,.4)';
 }
 
 // ══════════════════════════════════════════
