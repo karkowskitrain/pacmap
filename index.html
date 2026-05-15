@@ -26,6 +26,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 @keyframes loadFill   { 0%{width:0;margin-left:0} 50%{width:100%;margin-left:0} 100%{width:0;margin-left:100%} }
 @keyframes hitFlash   { 0%,100%{background:rgba(0,0,0,0)} 20%,60%{background:rgba(255,0,0,.55)} }
 @keyframes winFlash   { 0%,100%{background:rgba(0,0,0,0)} 20%,60%{background:rgba(255,215,0,.4)} }
+@keyframes pelletPulse { 0%,100%{opacity:1;r:9} 50%{opacity:0.5;r:11} }
 
 /* ══ TITLE ══ */
 #screen-title{ justify-content:flex-start; padding-top:16px; gap:0; }
@@ -187,6 +188,9 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 .leaflet-control-zoom a{ font-family:'Press Start 2P',monospace !important; font-size:8px !important; background:#000 !important; color:#FFD700 !important; border:2px solid #4444ff !important; width:28px !important; height:28px !important; line-height:24px !important; }
 .leaflet-popup-content-wrapper{ background:#000 !important; border:2px solid #FFD700 !important; border-radius:0 !important; font-family:'Press Start 2P',monospace !important; font-size:6px !important; color:#FFD700 !important; }
 .leaflet-popup-tip{ background:#FFD700 !important; }
+.power-pellet {
+  filter: drop-shadow(0 0 4px #ffffff);
+}
 .map-hud{ position:absolute; z-index:900; pointer-events:none; font-size:5px; color:#1a1a44; letter-spacing:1px; }
 #hud-tl{ top:8px; left:8px; }
 #hud-tr{ top:8px; right:8px; text-align:right; line-height:2; }
@@ -427,6 +431,8 @@ let mapReady      = false;
 let routeCoords   = [];
 let allRoadLayers = [];   // every street neon blue
 let routeDotMarkers = []; // white dots on route
+let powerPelletMarkers = []; // large pellets at turn points
+let turnCoords    = [];   // maneuver coords from route steps
 let ghostData     = [];   // {marker, lat, lng, dlat, dlng}
 let pacMarker     = null;
 let cherryMarker  = null;
@@ -442,7 +448,7 @@ let mouthTimer    = null;
 let ghostMoveTimer= null;
 let gameActive    = false;
 let lastRot       = 0;
-let hitCooldown   = false; // prevents rapid ghost hits
+let hitCooldown   = false;
 
 // ══════════════════════════════════════════
 // SCREENS
@@ -536,6 +542,7 @@ function initLeafMap() {
 // LAUNCH
 // ══════════════════════════════════════════
 async function launchMap() {
+  unlockAudio(); // Must be first — unlocks iOS audio on user gesture
   const oInput = document.getElementById('origin');
   const dInput = document.getElementById('dest-input');
   const oVal   = oInput.value.trim();
@@ -641,7 +648,21 @@ let wakaPhase = 0;
 
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // iOS requires resume() after user gesture
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
+}
+
+// Unlock audio on first tap — call this from START GAME button
+function unlockAudio() {
+  const ctx = getAudioCtx();
+  // Play a silent buffer to unlock iOS audio
+  const buf = ctx.createBuffer(1, 1, 22050);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start(0);
+  ctx.resume();
 }
 
 // Play a single tone: freq (Hz), type, duration (s), volume, startTime
@@ -778,9 +799,23 @@ function stopWaka() {
   if (wakaTimer) { clearInterval(wakaTimer); wakaTimer = null; }
 }
 
+// ── POWER PELLET ─────────────────────────
+// Ascending arpeggio — classic power-up feel
+function playPowerPellet() {
+  const ctx = getAudioCtx();
+  const t   = ctx.currentTime;
+  const seq = [[220,0.06],[330,0.06],[440,0.06],[660,0.12]];
+  let c = t;
+  for (const [freq, dur] of seq) {
+    playTone(freq, 'square', dur, 0.2, c, ctx);
+    c += dur;
+  }
+}
+
 // ══════════════════════════════════════════
 // ══ GPS PERMISSION REQUEST ══
 function requestGPS() {
+  unlockAudio();
   if (!navigator.geolocation) { alert('GPS NOT SUPPORTED ON THIS DEVICE'); return; }
   const btn = document.querySelector('button[onclick="requestGPS()"]');
   btn.textContent = '◎ REQUESTING GPS...';
@@ -840,6 +875,18 @@ function onGPSUpdate(lat, lng) {
       leafMap.removeLayer(dot);
       addScore(10);
       playWaka();
+      return false;
+    }
+    return true;
+  });
+
+  // Eat nearby power pellets (turn indicators) — bonus points + power sound
+  powerPelletMarkers = powerPelletMarkers.filter(pellet => {
+    if (leafMap.distance(pellet.getLatLng(), L.latLng(newPos)) < 35) {
+      leafMap.removeLayer(pellet);
+      addScore(50);
+      playPowerPellet();
+      setStatus('TURN AHEAD! 50 PTS!');
       return false;
     }
     return true;
@@ -945,6 +992,11 @@ async function buildRoute() {
   const eta   = mins >= 60 ? `${Math.floor(mins/60)}H ${mins%60}M` : `${mins}M`;
   document.getElementById('i-dist').textContent = dist;
   document.getElementById('i-eta').textContent  = eta;
+  // Extract turn maneuver coordinates from steps (skip first and last)
+  turnCoords = route.legs[0].steps
+    .slice(1, -1)
+    .filter(s => s.maneuver.type !== 'depart' && s.maneuver.type !== 'arrive')
+    .map(s => [s.maneuver.location[1], s.maneuver.location[0]]);
   buildTurnList(route.legs[0].steps);
 }
 
@@ -1063,7 +1115,6 @@ function drawRouteFallback() {
 // ROUTE DOTS (white dots showing path direction)
 // ══════════════════════════════════════════
 function placeRouteDots() {
-  // Remove existing
   routeDotMarkers.forEach(d => leafMap.removeLayer(d));
   routeDotMarkers = [];
   const step = Math.max(2, Math.floor(routeCoords.length / 60));
@@ -1074,6 +1125,24 @@ function placeRouteDots() {
     }).addTo(leafMap);
     routeDotMarkers.push(dot);
   }
+  placePowerPellets();
+}
+
+// Large glowing pellets at every turn/maneuver point
+function placePowerPellets() {
+  powerPelletMarkers.forEach(p => leafMap.removeLayer(p));
+  powerPelletMarkers = [];
+  turnCoords.forEach(tc => {
+    const pellet = L.circleMarker(tc, {
+      radius: 9,
+      color: '#ffffff',
+      fillColor: '#ffffff',
+      fillOpacity: 1,
+      weight: 2,
+      className: 'power-pellet',
+    }).addTo(leafMap);
+    powerPelletMarkers.push(pellet);
+  });
 }
 
 function restoreRouteDots() {
@@ -1304,10 +1373,11 @@ function buildTurnList(steps) {
 function clearMapLayers() {
   allRoadLayers.forEach(l => leafMap && leafMap.removeLayer(l));
   routeDotMarkers.forEach(l => leafMap && leafMap.removeLayer(l));
+  powerPelletMarkers.forEach(l => leafMap && leafMap.removeLayer(l));
   ghostData.forEach(g => leafMap && leafMap.removeLayer(g.marker));
   if (pacMarker)    leafMap.removeLayer(pacMarker);
   if (cherryMarker) leafMap.removeLayer(cherryMarker);
-  allRoadLayers=[]; routeDotMarkers=[]; ghostData=[]; ghostColorIdx=0;
+  allRoadLayers=[]; routeDotMarkers=[]; powerPelletMarkers=[]; ghostData=[]; ghostColorIdx=0; turnCoords=[];
   pacMarker=cherryMarker=null;
 }
 
