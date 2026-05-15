@@ -448,7 +448,6 @@ let mouthTimer    = null;
 let ghostMoveTimer= null;
 let gameActive    = false;
 let lastRot       = 0;
-let hitCooldown   = false;
 
 // ══════════════════════════════════════════
 // SCREENS
@@ -898,60 +897,7 @@ function onGPSUpdate(lat, lng) {
     return;
   }
 
-  // Check ghost collision
-  if (!hitCooldown) checkGhostCollision(newPos);
-
-  // Update parallel ghosts to track alongside Pac-Man
-  updateParallelGhosts(lat, lng);
-
   updateHUD();
-}
-
-// ══════════════════════════════════════════
-// GHOST COLLISION
-// ══════════════════════════════════════════
-function checkGhostCollision(pos) {
-  for (const g of ghostData) {
-    const d = leafMap.distance(L.latLng(pos), L.latLng([g.lat, g.lng]));
-    if (d < 25) { // ~25m collision radius
-      onGhostHit();
-      return;
-    }
-  }
-}
-
-function onGhostHit() {
-  if (!gameActive || hitCooldown) return;
-  hitCooldown = true;
-  playGhostHit();
-  const flash = document.getElementById('flash-overlay');
-  flash.className = '';
-  void flash.offsetWidth;
-  flash.className = 'hit';
-  setStatus('GHOST! RECALCULATING...');
-  setTimeout(async () => {
-    // Stay at current position, just recalculate route from here to destination
-    if (pacPos) {
-      originCoords = [...pacPos];
-      // Clear old route dots and road layers, redraw from current pos
-      routeDotMarkers.forEach(d => leafMap.removeLayer(d));
-      routeDotMarkers = [];
-      allRoadLayers.forEach(l => leafMap.removeLayer(l));
-      allRoadLayers = [];
-      ghostData.forEach(g => leafMap.removeLayer(g.marker));
-      ghostData = [];
-      offRoadSegments = [];
-      ghostColorIdx = 0;
-      try {
-        await buildRoute();
-        await drawAllRoads();
-        setStatus('ROUTE UPDATED! FOLLOW DOTS!');
-      } catch(e) {
-        setStatus('RECALC FAILED - KEEP GOING');
-      }
-    }
-    setTimeout(() => { hitCooldown = false; }, 2000);
-  }, 600);
 }
 
 function onGameOver() {
