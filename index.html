@@ -1061,12 +1061,12 @@ async function drawAllRoads() {
 
 function drawNeonRoad(coords) {
   // Outer glow halos
-  const g1 = L.polyline(coords, { color:'#000055', weight:16, opacity:0.55, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
-  const g2 = L.polyline(coords, { color:'#0000aa', weight:11, opacity:0.70, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
-  // Bright neon edge
-  const edge = L.polyline(coords, { color:'#3355ff', weight:8, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
-  // Black centre — wide enough to cover dual carriageway gaps
-  const black = L.polyline(coords, { color:'#000000', weight:7, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  const g1 = L.polyline(coords, { color:'#000088', weight:30, opacity:0.55, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  const g2 = L.polyline(coords, { color:'#0033ff', weight:22, opacity:0.70, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  // Bright neon edge — wider and brighter
+  const edge = L.polyline(coords, { color:'#66aaff', weight:18, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
+  // Black centre — wide enough for Pac-Man to fit inside with edges showing
+  const black = L.polyline(coords, { color:'#000000', weight:14, opacity:1, interactive:false, lineCap:'butt', lineJoin:'miter' }).addTo(leafMap);
   allRoadLayers.push(g1, g2, edge, black);
 }
 
