@@ -1085,10 +1085,11 @@ async function drawAllRoads() {
   }
 
   if (elements && elements.length > 0) {
-    // Store off-route segments for ghost tracking (don't draw them)
+    // Draw a thick black corridor over EVERY road
     for (const el of elements) {
       if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
       const coords  = el.geometry.map(p => [p.lat, p.lon]);
+      drawRoadCorridor(coords);
       const onRoute = isOnRoute(coords, routeSet);
       if (!onRoute) {
         storeOffRoadSegment(coords);
@@ -1101,21 +1102,25 @@ async function drawAllRoads() {
     setStatus('READY! GO!');
   }
 
-  // Highlight the route roads in yellow, then dots/pellets on top
+  // Also cover the route itself, then dots/pellets on top
   drawRouteHighlight(routeCoords);
   placeRouteDots();
 }
 
-// Highlight the chosen route roads with a thick black corridor
-function drawRouteHighlight(coords) {
+// Thick black corridor drawn over a road segment
+function drawRoadCorridor(coords) {
   if (!coords || coords.length < 2) return;
   const black = L.polyline(coords, { color:'#000000', weight:33, opacity:1, interactive:false, lineCap:'round', lineJoin:'round' }).addTo(leafMap);
   allRoadLayers.push(black);
 }
 
+// Cover the route road with the same black corridor
+function drawRouteHighlight(coords) {
+  drawRoadCorridor(coords);
+}
+
 function drawNeonRoad(coords) {
-  // Legacy function — now just calls highlight
-  drawRouteHighlight(coords);
+  drawRoadCorridor(coords);
 }
 
 // Build a set of rounded lat/lng strings for route coords
