@@ -899,10 +899,10 @@ let bigPacMouthTimer = null;
 
 function bigPacSvg(rot, open) {
   const mouth = open
-    ? `<polygon points="7,7 14,2 14,12" fill="#000"/>`
-    : `<polygon points="7,7 14,6 14,8" fill="#000"/>`;
-  return `<svg viewBox="0 0 14 14" width="100%" height="100%" style="image-rendering:pixelated;transform:rotate(${rot}deg);filter:drop-shadow(0 0 10px #FFD700) drop-shadow(0 0 20px rgba(255,215,0,.5))">
-    <circle cx="7" cy="7" r="6.5" fill="#FFD700"/>${mouth}
+    ? `<polygon points="7,7 13,3.5 13,10.5" fill="#000"/>`
+    : `<polygon points="7,7 13,6 13,8" fill="#000"/>`;
+  return `<svg viewBox="0 0 14 14" width="100%" height="100%" shape-rendering="geometricPrecision" style="transform:rotate(${rot}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,.8))">
+    <circle cx="7" cy="7" r="6" fill="#FFD700" stroke="#000" stroke-width="0.4"/>${mouth}
   </svg>`;
 }
 
@@ -1106,12 +1106,11 @@ async function drawAllRoads() {
   placeRouteDots();
 }
 
-// Highlight the chosen route roads with a yellow line
+// Highlight the chosen route roads with a thick black corridor
 function drawRouteHighlight(coords) {
   if (!coords || coords.length < 2) return;
-  const glow = L.polyline(coords, { color:'#FFD700', weight:11, opacity:0.30, interactive:false, lineCap:'round', lineJoin:'round' }).addTo(leafMap);
-  const line = L.polyline(coords, { color:'#FFD700', weight:5,  opacity:0.9,  interactive:false, lineCap:'round', lineJoin:'round' }).addTo(leafMap);
-  allRoadLayers.push(glow, line);
+  const black = L.polyline(coords, { color:'#000000', weight:33, opacity:1, interactive:false, lineCap:'round', lineJoin:'round' }).addTo(leafMap);
+  allRoadLayers.push(black);
 }
 
 function drawNeonRoad(coords) {
