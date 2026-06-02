@@ -171,6 +171,8 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 #big-pac-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; }
 #big-pac{ width:72px; height:72px; transition:width .4s, height .4s, transform .4s; }
 #big-pac-dist{ font-size:6px; color:#00FFFF; text-shadow:0 0 6px #00FFFF; letter-spacing:1px; }
+#time-lives{ display:flex; flex-wrap:wrap; justify-content:center; gap:3px; padding:6px 4px; }
+#time-lives svg{ width:14px; height:14px; }
 .info-block{ padding:5px 8px; border-bottom:1px solid #0d0d22; }
 .info-lbl{ font-size:5px; color:#6666aa; letter-spacing:1px; margin-bottom:2px; }
 .info-val{ font-size:10px; color:#FFD700; text-shadow:0 0 8px rgba(255,215,0,.5); }
@@ -195,7 +197,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
 #map{ width:100%; height:100%; }
 /* Hide street tiles — everything that isn't a black road becomes electric blue */
 .leaflet-tile-pane{ display:none !important; }
-.leaflet-container{ background:#0a3cff !important; }
+.leaflet-container{ background:#1b03ff !important; }
 .leaflet-control-attribution{ display:none !important; }
 .leaflet-control-zoom a{ font-family:'Press Start 2P',monospace !important; font-size:8px !important; background:#000 !important; color:#FFD700 !important; border:2px solid #4444ff !important; width:28px !important; height:28px !important; line-height:24px !important; }
 .leaflet-popup-content-wrapper{ background:#000 !important; border:2px solid #FFD700 !important; border-radius:0 !important; font-family:'Press Start 2P',monospace !important; font-size:6px !important; color:#FFD700 !important; }
@@ -383,6 +385,7 @@ body{ background:#000; font-family:'Press Start 2P',monospace; color:#fff; heigh
       <div id="big-pac"></div>
       <div id="big-pac-dist">---</div>
     </div>
+    <div id="time-lives"></div>
     <div class="score-display">
       <div class="score-lbl" style="font-size:6px;">SCORE</div>
       <div class="score-num" style="font-size:6px;" id="map-score">000000</div>
@@ -431,6 +434,8 @@ let powerPelletMarkers = []; // large pellets at turn points
 let fruitMarkers  = [];   // fruit at turn points
 let turnCoords    = [];   // maneuver coords from route steps
 let turnManeuvers = [];   // {coord, modifier} for each turn
+let routeTotalDist = 0;   // total route distance (m)
+let routeTotalDur  = 0;   // total route duration (s)
 let ghostData     = [];   // {marker, lat, lng, dlat, dlng}
 let pacMarker     = null;
 let cherryMarker  = null;
@@ -744,17 +749,7 @@ function playGhostHit() {
 
 // ── GAME OVER ────────────────────────────
 function playGameOver() {
-  const ctx = getAudioCtx();
-  const t   = ctx.currentTime + 0.1;
-  const seq = [
-    [494,0.15],[466,0.15],[440,0.15],[415,0.15],
-    [392,0.15],[370,0.15],[349,0.15],[330,0.30],
-  ];
-  let c = t;
-  for (const [freq, dur] of seq) {
-    playTone(freq, 'square', dur * 0.9, 0.18, c, ctx);
-    c += dur;
-  }
+  // Game over sound removed — no audio plays on game over
 }
 
 // ── WIN JINGLE ───────────────────────────
@@ -888,6 +883,15 @@ function onGPSUpdate(lat, lng) {
   // Update the big directional Pac-Man indicator
   updateBigPac(lat, lng);
 
+  // Update time-to-destination Pac-Man lives based on remaining distance
+  if (routeTotalDist > 0 && routeTotalDur > 0) {
+    const remainingDist = leafMap.distance(L.latLng(newPos), L.latLng(destCoords));
+    // Estimate remaining time proportionally to remaining straight-line distance
+    const avgSpeed = routeTotalDist / routeTotalDur; // m/s along route
+    const remainingMin = (remainingDist / avgSpeed) / 60;
+    renderTimeLives(remainingMin);
+  }
+
   updateHUD();
 }
 
@@ -904,6 +908,18 @@ function bigPacSvg(rot, open) {
   return `<svg viewBox="0 0 14 14" width="100%" height="100%" shape-rendering="geometricPrecision" style="transform:rotate(${rot}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,.8))">
     <circle cx="7" cy="7" r="6" fill="#FFD700" stroke="#000" stroke-width="0.4"/>${mouth}
   </svg>`;
+}
+
+// Render row of Pac-Man "lives" = time to destination.
+// 1 pac = 10 min or less, 2 = 20 min, ... max 6 = 60 min. Each vanishes per 10 min elapsed.
+function renderTimeLives(minutesRemaining) {
+  const el = document.getElementById('time-lives');
+  if (!el) return;
+  let count = Math.ceil(minutesRemaining / 10);
+  if (count < 1) count = (minutesRemaining > 0 ? 1 : 0);
+  if (count > 6) count = 6;
+  const pac = `<svg viewBox="0 0 14 14" shape-rendering="geometricPrecision" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.6))"><circle cx="7" cy="7" r="6" fill="#FFD700" stroke="#000" stroke-width="0.4"/><polygon points="7,7 13,3.5 13,10.5" fill="#000"/></svg>`;
+  el.innerHTML = pac.repeat(count);
 }
 
 function startBigPacMouth() {
@@ -983,7 +999,6 @@ function updateBigPac(lat, lng) {
 function onGameOver() {
   stopGame();
   if (score > highScore) highScore = score;
-  playGameOver();
   document.getElementById('msg-title').textContent = 'GAME OVER';
   document.getElementById('msg-sub').textContent   = 'SCORE: ' + String(score).padStart(6,'0');
   document.getElementById('game-msg').classList.add('show');
@@ -1013,11 +1028,14 @@ async function buildRoute() {
   if (data.code !== 'Ok') throw new Error('ROUTE FAILED');
   const route = data.routes[0];
   routeCoords = route.geometry.coordinates.map(c => [c[1],c[0]]);
+  routeTotalDist = route.distance;       // metres
+  routeTotalDur  = route.duration;       // seconds
   const dist  = (route.distance/1000).toFixed(2)+' KM';
   const mins  = Math.round(route.duration/60);
   const eta   = mins >= 60 ? `${Math.floor(mins/60)}H ${mins%60}M` : `${mins}M`;
   document.getElementById('i-dist').textContent = dist;
   document.getElementById('i-eta').textContent  = eta;
+  renderTimeLives(route.duration / 60);  // initial lives from full ETA
   // Extract turn maneuver coordinates AND directions from steps
   const steps = route.legs[0].steps;
   turnCoords = [];
