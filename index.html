@@ -547,7 +547,7 @@ function initLeafMap() {
 // ══════════════════════════════════════════
 async function launchMap() {
   unlockAudio(); // Must be first — unlocks iOS audio on user gesture
-  playCreditSound();
+  playIntroJingle();
   const oInput = document.getElementById('origin');
   const dInput = document.getElementById('dest-input');
   const oVal   = oInput.value.trim();
@@ -612,8 +612,6 @@ async function startGame() {
   renderBigPac();
   gameActive = true;
   setStatus('GO! FOLLOW THE DOTS!');
-  // Play intro jingle — must be triggered by user gesture (button press), so this is fine
-  playIntroJingle();
 }
 
 async function retryGame() {
@@ -642,7 +640,6 @@ async function retryGame() {
   renderBigPac();
   gameActive = true;
   setStatus('TRY AGAIN!');
-  playIntroJingle();
 }
 
 function stopGame() {
